@@ -7,9 +7,9 @@ import { InferenceWorkflow } from "./inference.js";
 import type { InferenceRequest } from "../types.js";
 
 test("routes each request type to its workflow-owned model", () => {
-  assert.equal(modelForRequestType("fast"), "gpt-4o-mini");
-  assert.equal(modelForRequestType("reasoning"), "o3-mini");
-  assert.equal(modelForRequestType("agent"), "claude-sonnet-4-6");
+  assert.equal(modelForRequestType("fast"), "omlx/qwen3.8-27b");
+  assert.equal(modelForRequestType("reasoning"), "omlx/qwen3.8-27b");
+  assert.equal(modelForRequestType("agent"), "omlx/qwen3.8-27b");
 });
 
 test("executes through a Temporal worker and returns a serialized result", async () => {
@@ -31,7 +31,7 @@ test("executes through a Temporal worker and returns a serialized result", async
       taskQueue: "workflow-test",
       workflowId: "inference-workflow-test",
     });
-    assert.deepEqual(result, { text: "ok", model: "o3-mini" });
+    assert.deepEqual(result, { text: "ok", model: "omlx/qwen3.8-27b" });
   } finally {
     worker.shutdown();
     await run;

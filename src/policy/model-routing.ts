@@ -1,9 +1,9 @@
 import type { InferenceRequestType } from "../types.js";
 
 const models: Record<InferenceRequestType, string> = {
-  fast: "gpt-4o-mini",
-  reasoning: "o3-mini",
-  agent: "claude-sonnet-4-6",
+  fast: "omlx/qwen3.8-27b",
+  reasoning: "omlx/qwen3.8-27b",
+  agent: "omlx/qwen3.8-27b",
 };
 
 export function modelForRequestType(requestType: InferenceRequestType): string {
