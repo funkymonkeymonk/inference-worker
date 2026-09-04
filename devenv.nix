@@ -17,6 +17,26 @@
   };
 
   tasks = {
+    "worker:build" = {
+      description = "Build the TypeScript worker";
+      exec = "npm run build";
+    };
+
+    "worker:test" = {
+      description = "Run worker tests";
+      exec = "npm test";
+    };
+
+    "worker:start" = {
+      description = "Start the Temporal worker";
+      exec = "npm start";
+    };
+
+    "worker:client" = {
+      description = "Submit a test inference workflow";
+      exec = "npm run client -- \"Say hello.\"";
+    };
+
     "temporal:health" = {
       description = "Check the local Temporal frontend";
       exec = ''
