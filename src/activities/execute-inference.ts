@@ -1,7 +1,12 @@
 import { Context } from "@temporalio/activity";
+import { ApplicationFailure } from "@temporalio/common";
 import type { ExecuteInferenceInput, InferenceResult, InferenceUsage } from "../types.js";
 
 const REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
+
+export function chatCompletionsUrl(endpoint: string): string {
+  return `${endpoint.replace(/\/+$/, "")}/chat/completions`;
+}
 
 export function parseSseData(data: string): { text?: string; usage?: InferenceUsage } | null {
   if (data === "[DONE]") return null;
@@ -32,7 +37,7 @@ export async function executeInference({ request, model }: ExecuteInferenceInput
   try {
     const endpoint = process.env.INFERENCE_ENDPOINT;
     if (!endpoint) throw new Error("INFERENCE_ENDPOINT is not configured");
-    const response = await fetch(endpoint, {
+    const response = await fetch(chatCompletionsUrl(endpoint), {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -48,7 +53,14 @@ export async function executeInference({ request, model }: ExecuteInferenceInput
       }),
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`inference endpoint returned HTTP ${response.status}: ${await response.text()}`);
+    if (!response.ok) {
+      const detail = await response.text();
+      const message = `inference endpoint returned HTTP ${response.status}: ${detail}`;
+      if (response.status >= 400 && response.status < 500) {
+        throw ApplicationFailure.nonRetryable(message, "InferenceClientError", response.status);
+      }
+      throw new Error(message);
+    }
     if (!response.body) throw new Error("inference endpoint returned no response body");
 
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();

@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseSseData } from "./execute-inference.js";
+import { chatCompletionsUrl, parseSseData } from "./execute-inference.js";
+
+test("builds the chat completions URL from an OpenAI-compatible base URL", () => {
+  assert.equal(chatCompletionsUrl("http://127.0.0.1:8081/v1"), "http://127.0.0.1:8081/v1/chat/completions");
+  assert.equal(chatCompletionsUrl("http://127.0.0.1:8081/v1/"), "http://127.0.0.1:8081/v1/chat/completions");
+});
 
 test("parses streamed text and usage without retaining chunks", () => {
   assert.deepEqual(parseSseData('{"choices":[{"delta":{"content":"hello"}}]}'), { text: "hello" });
