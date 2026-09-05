@@ -1,5 +1,8 @@
 {pkgs, ...}: {
-  packages = [pkgs.temporal-cli];
+  packages = [
+    pkgs.nodejs
+    pkgs.temporal-cli
+  ];
 
   services.temporal = {
     enable = true;
