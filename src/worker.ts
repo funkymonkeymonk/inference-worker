@@ -10,7 +10,7 @@ const worker = await Worker.create({
   connection,
   namespace,
   taskQueue,
-  workflowsPath: new URL("./workflows/inference.js", import.meta.url).pathname,
+  workflowsPath: new URL("./workflows/index.js", import.meta.url).pathname,
   activities,
   maxConcurrentActivityTaskExecutions: Number(process.env.WORKER_ACTIVITY_SLOTS ?? 1),
 });

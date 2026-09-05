@@ -42,4 +42,63 @@ export interface PiTaskResult {
   text: string;
 }
 
+export type AgentToolName = "read" | "write" | "edit" | "bash";
+
+export interface AgentPolicy {
+  model: string;
+  allowedTools: AgentToolName[];
+  maxRunTimeSeconds: number;
+}
+
+export interface ExecuteAgentInput {
+  task: string;
+  workspacePath: string;
+  policy: AgentPolicy;
+}
+
+export interface ExecuteAgentResult {
+  completed: boolean;
+  text: string;
+  toolCalls: number;
+}
+
+export type WorkItemPhase = "queued" | "claimed" | "agent" | "review" | "merged" | "completed" | "released" | "failed";
+
+export interface WorkItemInput {
+  taskId: string;
+  title: string;
+  context: string;
+  repositoryRoot: string;
+  policy: AgentPolicy;
+}
+
+export interface WorkItemState {
+  taskId: string;
+  phase: WorkItemPhase;
+  workspacePath?: string;
+  pullRequestUrl?: string;
+  pullRequestNumber?: number;
+  feedbackRound: number;
+  failure?: string;
+}
+
+export type DispatchCandidateKind = "review" | "implementation";
+
+export interface DispatchCandidate {
+  id: string;
+  title: string;
+  context: string;
+  kind: DispatchCandidateKind;
+  workflowInput: WorkItemInput;
+}
+
+export interface TaskBackend {
+  listDispatchCandidates(input: { excludeIds: string[]; limit: number }): Promise<DispatchCandidate[]>;
+  claim(id: string): Promise<void>;
+  release(id: string, reason: string): Promise<void>;
+  markDone(id: string): Promise<void>;
+  getContext(id: string): Promise<string>;
+  attachPullRequest(id: string, url: string): Promise<void>;
+}
+
 export const TASK_QUEUE = "inference-worker";
