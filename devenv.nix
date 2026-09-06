@@ -81,6 +81,11 @@ in {
       exec = "npm start";
     };
 
+    "worker:start:dev" = {
+      description = "Start the Temporal worker from TypeScript source";
+      exec = "npm run dev";
+    };
+
     "worker:client" = {
       description = "Submit a test inference workflow";
       exec = "npm run client -- \"Say hello.\"";
