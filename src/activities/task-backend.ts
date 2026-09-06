@@ -8,7 +8,7 @@ function configuredBackend(): TaskBackend {
     repositoryRoot: process.env.REPOSITORY_ROOT ?? process.cwd(),
     policy: {
       model: process.env.AGENT_MODEL ?? "omlx/qwen3.8-27b",
-      allowedTools: ["read", "write", "edit", "bash"] as AgentToolName[],
+       allowedTools: ["read", "write", "edit", "bash", "listToolFiles"] as AgentToolName[],
       maxRunTimeSeconds: Number(process.env.AGENT_MAX_RUN_TIME_SECONDS ?? 7200),
     },
   });

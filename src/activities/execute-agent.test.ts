@@ -73,6 +73,20 @@ test("rejects a tool that is not in the policy allowlist", async () => {
   );
 });
 
+test("lists files inside the workspace", async () => {
+  const workspacePath = await mkdtemp(path.join(os.tmpdir(), "agent-test-"));
+  await writeFile(path.join(workspacePath, "notes.txt"), "contract notes");
+  assert.equal(await runAgentTool("listToolFiles", {}, workspacePath, ["listToolFiles"]), "notes.txt\n");
+});
+
+test("returns ordinary bash failures to the agent", async () => {
+  const workspacePath = await mkdtemp(path.join(os.tmpdir(), "agent-test-"));
+  const result = await runAgentTool("bash", { command: "printf output; printf error >&2; exit 1" }, workspacePath, ["bash"]);
+  assert.match(result, /exit code 1/);
+  assert.match(result, /output/);
+  assert.match(result, /error/);
+});
+
 test("bounds bash execution time", async () => {
   const workspacePath = await mkdtemp(path.join(os.tmpdir(), "agent-test-"));
   await assert.rejects(

@@ -16,12 +16,16 @@ const { listDispatchCandidates, claimTask, releaseTask, markTaskDone } = proxyAc
 
 export const dispatcherStateQuery = defineQuery<DispatcherState>("state");
 
+export function dispatchExclusions(state: DispatcherState): string[] {
+  return [...state.activeTaskIds, ...state.failedTaskIds];
+}
+
 export async function WorkDispatcherWorkflow(input: DispatcherInput): Promise<DispatcherState> {
   const state: DispatcherState = { activeTaskIds: [], completedTaskIds: [], failedTaskIds: [] };
   setHandler(dispatcherStateQuery, () => state);
   const capacity = Math.max(0, input.maxConcurrentImplementations);
   do {
-    const candidates = capacity === 0 ? [] : await listDispatchCandidates({ excludeIds: state.activeTaskIds, limit: capacity });
+    const candidates = capacity === 0 ? [] : await listDispatchCandidates({ excludeIds: dispatchExclusions(state), limit: capacity });
     for (const candidate of candidates.slice(0, capacity - state.activeTaskIds.length)) {
       await claimTask(candidate.id);
       state.activeTaskIds.push(candidate.id);

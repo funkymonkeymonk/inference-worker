@@ -42,7 +42,7 @@ export interface PiTaskResult {
   text: string;
 }
 
-export type AgentToolName = "read" | "write" | "edit" | "bash";
+export type AgentToolName = "read" | "write" | "edit" | "bash" | "listToolFiles";
 
 export interface AgentPolicy {
   model: string;

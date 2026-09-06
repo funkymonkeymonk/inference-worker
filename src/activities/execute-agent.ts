@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { Context } from "@temporalio/activity";
@@ -13,6 +13,7 @@ import type {
 const execFileAsync = promisify(execFile);
 const DEFAULT_BASH_TIMEOUT_MS = 30_000;
 const MAX_BASH_OUTPUT_BYTES = 1024 * 1024;
+const IGNORED_DIRECTORY_NAMES = new Set([".git", ".yaks", ".devenv", "node_modules", "__pycache__"]);
 const TOOL_SCHEMAS: Record<AgentToolName, object> = {
   read: {
     type: "function",
@@ -48,6 +49,14 @@ const TOOL_SCHEMAS: Record<AgentToolName, object> = {
       name: "bash",
       description: "Run a bounded bash command in the workspace.",
       parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+    },
+  },
+  listToolFiles: {
+    type: "function",
+    function: {
+      name: "listToolFiles",
+      description: "List files inside the workspace, optionally below a relative directory.",
+      parameters: { type: "object", properties: { path: { type: "string" } } },
     },
   },
 };
@@ -99,6 +108,25 @@ function workspaceFile(workspacePath: string, requestedPath: string): string {
   return resolvedPath;
 }
 
+async function listWorkspaceFiles(workspacePath: string, requestedPath = ""): Promise<string> {
+  const root = workspaceFile(workspacePath, requestedPath || ".");
+  const files: string[] = [];
+
+  async function visit(directory: string): Promise<void> {
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      if (entry.isDirectory() && IGNORED_DIRECTORY_NAMES.has(entry.name)) continue;
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) await visit(absolutePath);
+      else if (entry.isFile()) files.push(path.relative(workspacePath, absolutePath));
+    }
+  }
+
+  await visit(root);
+  return files.join("\n") + (files.length ? "\n" : "");
+}
+
 function assertToolAllowed(toolName: string, allowedTools: AgentToolName[]): asserts toolName is AgentToolName {
   if (!allowedTools.includes(toolName as AgentToolName)) throw new Error(`tool "${toolName}" is not allowed`);
 }
@@ -126,6 +154,7 @@ export async function runAgentTool(
     await writeFile(filePath, `${content.slice(0, first)}${String(args.newText)}${content.slice(first + oldText.length)}`, "utf8");
     return "ok";
   }
+  if (toolName === "listToolFiles") return listWorkspaceFiles(workspacePath, String(args.path ?? ""));
   try {
     const result = await execFileAsync("bash", ["-lc", String(args.command)], {
       cwd: workspacePath,
@@ -135,11 +164,13 @@ export async function runAgentTool(
     });
     return `${result.stdout}${result.stderr}`;
   } catch (error) {
-    const processError = error as NodeJS.ErrnoException & { killed?: boolean; signal?: string };
+    const processError = error as NodeJS.ErrnoException & { killed?: boolean; signal?: string; stdout?: string; stderr?: string };
     if (processError.code === "ETIMEDOUT" || processError.killed || processError.signal === "SIGTERM") {
       throw new Error(`bash command timed out after ${options.timeoutMs ?? DEFAULT_BASH_TIMEOUT_MS}ms`);
     }
-    throw error;
+    const stdout = typeof processError.stdout === "string" ? processError.stdout : "";
+    const stderr = typeof processError.stderr === "string" ? processError.stderr : String(processError.message ?? error);
+    return `exit code ${processError.code ?? "unknown"}\n${stdout}${stderr}`;
   }
 }
 
