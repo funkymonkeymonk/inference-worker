@@ -6,10 +6,13 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { Connection, Client } from "@temporalio/client";
 import test from "node:test";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = process.cwd();
+const temporalAddress = process.env.INTEGRATION_TEMPORAL_ADDRESS ?? process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
+const temporalNamespace = process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? process.env.TEMPORAL_NAMESPACE ?? "inference";
 
 function sse(events: unknown[]): string {
   return `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")}data: [DONE]\n\n`;
@@ -43,6 +46,7 @@ test("devenv worker dispatches and completes a real yak", async () => {
   const yakName = `integration worker shaves yak ${suffix}`;
   const markerName = `.integration-shaved-${suffix}.txt`;
   const markerPath = path.join(repositoryRoot, markerName);
+  const dispatcherWorkflowId = `integration-dispatcher-${suffix}`;
   const server = createServer(async (request, response) => {
     let body = "";
     for await (const chunk of request) body += chunk;
@@ -68,7 +72,7 @@ test("devenv worker dispatches and completes a real yak", async () => {
         TEMPORAL_ADDRESS: process.env.INTEGRATION_TEMPORAL_ADDRESS ?? process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233",
         TEMPORAL_NAMESPACE: process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? process.env.TEMPORAL_NAMESPACE ?? "inference",
         TEMPORAL_TASK_QUEUE: `integration-worker-${suffix}`,
-        DISPATCHER_WORKFLOW_ID: `integration-dispatcher-${suffix}`,
+        DISPATCHER_WORKFLOW_ID: dispatcherWorkflowId,
         REPOSITORY_ROOT: repositoryRoot,
         TASK_BACKEND: "yx",
         DISPATCHER_POLL_INTERVAL_MS: "100",
@@ -97,6 +101,17 @@ test("devenv worker dispatches and completes a real yak", async () => {
     if (worker && worker.exitCode === null) {
       worker.kill("SIGTERM");
       await new Promise<void>((resolve) => worker?.once("exit", () => resolve()));
+    }
+    try {
+      const temporalConnection = await Connection.connect({ address: temporalAddress });
+      try {
+        const temporalClient = new Client({ connection: temporalConnection, namespace: temporalNamespace });
+        await temporalClient.workflow.getHandle(dispatcherWorkflowId).terminate("integration test cleanup");
+      } finally {
+        await temporalConnection.close();
+      }
+    } catch {
+      // The dispatcher may not have started if the worker failed during startup.
     }
     await rm(markerPath, { force: true });
     await yx(["remove", yakName]).catch(() => undefined);
