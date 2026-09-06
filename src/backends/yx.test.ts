@@ -3,26 +3,69 @@ import test from "node:test";
 import { YxTaskBackend, type YxCommandRunner, type YxYak } from "./yx.js";
 
 const yaks: YxYak[] = [
-  { id: "new-low", name: "new low", state: "todo", tags: ["@g2g", "@priority:2"], createdAt: "2026-01-02T00:00:00Z", context: "new work" },
-  { id: "review-high", name: "review high", state: "todo", tags: ["@g2g", "@priority:1"], createdAt: "2026-01-03T00:00:00Z", context: "PR has actionable CHANGES_REQUESTED feedback" },
-  { id: "new-high", name: "new high", state: "todo", tags: ["@g2g", "@priority:9"], createdAt: "2026-01-01T00:00:00Z", context: "new work" },
-  { id: "bad-priority", name: "bad priority", state: "todo", tags: ["@g2g", "@priority:urgent"], context: "skip me" },
-  { id: "not-ready", name: "not ready", state: "wip", tags: ["@g2g", "@priority:100"], context: "skip me" },
+  {
+    id: "root-low",
+    name: "root low",
+    state: "wip",
+    tags: ["@g2g", "@priority:2"],
+    children: [{ id: "low-child", name: "low child", state: "todo", context: "new work" }],
+  },
+  {
+    id: "root-high",
+    name: "root high",
+    state: "wip",
+    tags: ["@g2g", "@priority:9"],
+    children: [{
+      id: "high-child",
+      name: "high child",
+      state: "todo",
+      context: "new work",
+      children: [{ id: "high-grandchild", name: "high grandchild", state: "todo", context: "new work" }],
+    }],
+  },
+  {
+    id: "root-review",
+    name: "root review",
+    state: "todo",
+    tags: ["@g2g", "@priority:5"],
+    context: "final documentation and quality review",
+    children: [{ id: "review-child", name: "review child", state: "done" }],
+  },
+  {
+    id: "root-blocked-review",
+    name: "root blocked review",
+    state: "todo",
+    tags: ["@g2g", "@priority:8"],
+    context: "final documentation and quality review",
+    children: [{ id: "unfinished-child", name: "unfinished child", state: "wip" }],
+  },
+  {
+    id: "root-no-priority",
+    name: "root no priority",
+    state: "wip",
+    tags: ["@g2g"],
+    children: [{ id: "child-no-priority", name: "child no priority", state: "todo" }],
+  },
 ];
 
 function backend(runner: YxCommandRunner = async () => JSON.stringify(yaks)): YxTaskBackend {
   return new YxTaskBackend({ repositoryRoot: "/workspace/project", policy: { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 60 }, runner });
 }
 
-test("orders review candidates before implementation candidates", async () => {
+test("inherits root metadata and orders candidates by root priority then depth", async () => {
   const candidates = await backend().listDispatchCandidates({ excludeIds: [], limit: 10 });
-  assert.deepEqual(candidates.map((candidate) => candidate.id), ["review-high", "new-high", "new-low"]);
-  assert.equal(candidates[0].kind, "review");
+  assert.deepEqual(candidates.map((candidate) => candidate.id), ["high-grandchild", "high-child", "root-review", "low-child"]);
+  assert.equal(candidates[2].kind, "review");
 });
 
-test("skips malformed priorities, non-todo yaks, exclusions, and applies limit", async () => {
-  const candidates = await backend().listDispatchCandidates({ excludeIds: ["review-high"], limit: 1 });
-  assert.deepEqual(candidates.map((candidate) => candidate.id), ["new-high"]);
+test("does not dispatch a root review until every child is terminal", async () => {
+  const candidates = await backend().listDispatchCandidates({ excludeIds: [], limit: 10 });
+  assert.equal(candidates.some((candidate) => candidate.id === "root-blocked-review"), false);
+});
+
+test("skips roots without valid metadata, exclusions, and applies limit", async () => {
+  const candidates = await backend().listDispatchCandidates({ excludeIds: ["high-grandchild"], limit: 1 });
+  assert.deepEqual(candidates.map((candidate) => candidate.id), ["high-child"]);
 });
 
 test("maps lifecycle operations to yx commands", async () => {

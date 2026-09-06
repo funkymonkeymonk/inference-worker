@@ -24,6 +24,7 @@ interface CandidateRecord {
   yak: YxYak;
   priority: number;
   kind: "review" | "implementation";
+  depth: number;
 }
 
 function defaultRunner(repositoryRoot: string): YxCommandRunner {
@@ -36,8 +37,17 @@ function defaultRunner(repositoryRoot: string): YxCommandRunner {
   });
 }
 
-function flatten(yaks: YxYak[]): YxYak[] {
-  return yaks.flatMap((yak) => [yak, ...flatten(yak.children ?? [])]);
+interface YakRecord {
+  yak: YxYak;
+  root: YxYak;
+  depth: number;
+}
+
+function flatten(yaks: YxYak[], root?: YxYak, depth = 0): YakRecord[] {
+  return yaks.flatMap((yak) => [
+    { yak, root: root ?? yak, depth },
+    ...flatten(yak.children ?? [], root ?? yak, depth + 1),
+  ]);
 }
 
 function priorityFor(yak: YxYak): number | undefined {
@@ -53,6 +63,10 @@ function hasTag(yak: YxYak, tag: string): boolean {
 
 function isReview(yak: YxYak): boolean {
   return /CHANGES_REQUESTED/i.test(yak.context ?? "") && !/resolved|addressed|closed/i.test(yak.context ?? "");
+}
+
+function descendantsAreTerminal(yak: YxYak): boolean {
+  return (yak.children ?? []).every((child) => child.state === "done" && descendantsAreTerminal(child));
 }
 
 export class YxTaskBackend implements TaskBackend {
@@ -74,18 +88,25 @@ export class YxTaskBackend implements TaskBackend {
     const parsed = JSON.parse(raw) as YxYak[];
     const excluded = new Set(input.excludeIds);
     const records: CandidateRecord[] = [];
-    for (const yak of flatten(parsed)) {
-      if (yak.state !== "todo" || excluded.has(yak.id) || !hasTag(yak, "@g2g")) continue;
-      const priority = priorityFor(yak);
+    for (const { yak, root, depth } of flatten(parsed)) {
+      if (!hasTag(root, "@g2g")) continue;
+      const priority = priorityFor(root);
       if (priority === undefined) {
-        this.logger(`skipping yak ${yak.id}: missing or malformed @priority tag`);
+        this.logger(`skipping root yak ${root.id}: missing or malformed @priority tag`);
         continue;
       }
-      records.push({ yak, priority, kind: isReview(yak) ? "review" : "implementation" });
+      if (yak === root) {
+        if (yak.state !== "todo" || excluded.has(yak.id) || !descendantsAreTerminal(yak)) continue;
+        records.push({ yak, priority, kind: "review", depth });
+        continue;
+      }
+      if (yak.state !== "todo" || excluded.has(yak.id)) continue;
+      records.push({ yak, priority, kind: isReview(yak) ? "review" : "implementation", depth });
     }
     records.sort((left, right) => {
-      if (left.kind !== right.kind) return left.kind === "review" ? -1 : 1;
       if (left.priority !== right.priority) return right.priority - left.priority;
+      if (left.depth !== right.depth) return right.depth - left.depth;
+      if (left.kind !== right.kind) return left.kind === "review" ? -1 : 1;
       const leftCreated = left.yak.createdAt ?? "";
       const rightCreated = right.yak.createdAt ?? "";
       return leftCreated.localeCompare(rightCreated) || left.yak.id.localeCompare(right.yak.id);

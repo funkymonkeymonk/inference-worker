@@ -53,12 +53,16 @@ The contract guarantees that candidates are returned in admission order.
 
 The `yx` adapter owns these rules:
 
-- Eligibility requires both `@g2g` and `yx list --ready`.
-- A valid `@priority:<integer>` tag is required.
-- Missing or malformed priority tags are skipped.
-- Candidates are ordered by priority descending, creation time ascending, and
-  stable yak ID ascending.
-- Review work is ordered ahead of new implementation.
+- The root yak owns both `@g2g` and a valid `@priority:<integer>` tag; descendants
+  inherit those values and do not need their own tags.
+- Only `todo` descendants are implementation candidates. The root yak is never
+  an implementation candidate.
+- The root yak is a review-only final check for documentation, spec completion,
+  code quality, and tests. It becomes eligible only after every descendant is
+  terminal.
+- Missing or malformed root priority tags exclude the entire tree.
+- Candidates are ordered by root priority descending, tree depth descending,
+  review kind, creation time ascending, and stable yak ID ascending.
 
 The adapter also owns `yx start`, release, completion, context, PR fields, and
 repository synchronization. A future Jira or Linear adapter can map its own
