@@ -1,8 +1,24 @@
 # Yak Template
 
-Use this template for every new implementation yak in this repository. The yak
-name should be a concise imperative sentence. Add `@g2g` and a valid
-`@priority:<integer>` tag when the yak is eligible for automatic dispatch.
+Use this template for every new yak in this repository. The yak name should be
+a concise imperative sentence. Every yak must have the sections below, even if
+the answer is `None`.
+
+## Root Yak
+
+Create one root yak for a coherent body of work. The root is a review-only
+final check, not an implementation task. Its context must explain how to verify
+that the documentation, complete specification, code organization, tests, and
+acceptance criteria are finished. Put `@g2g` and a valid `@priority:<integer>`
+on the root only when the complete tree is ready for automatic dispatch.
+
+## Child Yak
+
+Put implementation work below the root using `yx add --under`. Children inherit
+the root's `@g2g` and `@priority` tags; do not add those tags to children. A
+child should describe one independently testable outcome. Use the hierarchy to
+represent prerequisites: deeper children are dispatched before shallower
+children at the same root priority.
 
 ```markdown
 # Goal
@@ -42,12 +58,18 @@ boundaries.
 
 ## Yak Creation Rules
 
-- Keep one implementation outcome per yak; split work when acceptance criteria
-  would require unrelated files or independent review.
+- Keep one implementation outcome per child yak; split work when acceptance
+  criteria would require unrelated files or independent review.
+- Use the root only for final review. Do not put implementation work directly
+  on the root.
 - Put prerequisites below the work they block in the `yx` hierarchy.
 - Keep Temporal workflows deterministic and backend-neutral. Put side effects,
   task-tool parsing, filesystem access, network calls, and process execution in
   Activities or adapters.
 - Include tests in the same yak as the behavior they protect.
-- Use `@priority:<integer>` only for explicit admission order; do not encode
-  priority in workflow orchestration.
+- Add `@g2g` and `@priority:<integer>` to the root only. These tags apply to the
+  whole tree and define its admission order.
+- Do not add `@g2g` or `@priority` to descendants.
+- The root final review is eligible only after every descendant is terminal.
+- Use `yx list --only not-done --tag g2g` to find dispatchable trees and
+  `yx show <root> --format json` to inspect inherited work.

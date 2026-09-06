@@ -29,6 +29,20 @@ slots, asks the backend for ordered candidates, and starts work-item workflows.
 The backend's returned order is authoritative. The dispatcher never assigns or
 rewrites priority.
 
+## Yak Tree Structure
+
+Each coherent body of work is represented by one root yak and implementation
+descendants. The root is a review-only final check covering documentation,
+complete specification, code organization, tests, and acceptance criteria. It
+is not implementation work and becomes eligible only after every descendant is
+terminal.
+
+The root owns the `@g2g` and `@priority:<integer>` tags. Descendants inherit
+those tags and must not carry their own copies. At equal root priority, deeper
+descendants are admitted before shallower descendants. This makes the yx tree
+the prerequisite and ordering model while keeping the Temporal workflows
+backend-neutral.
+
 ## Backend Boundary
 
 The backend owns all task-tool behavior:
@@ -75,10 +89,11 @@ The dispatcher uses two logical classes of backend candidates:
 
 1. Review work for pull requests with actionable `CHANGES_REQUESTED` feedback.
 2. New implementation work.
+3. The root's final review after all descendants are terminal.
 
-The backend returns all review candidates before all new implementation
-candidates. Within each class it applies its own deterministic ordering. A
-free implementation slot always admits the first returned candidate.
+The backend applies root priority and tree depth before the review kind. Review
+work wins only when those ordering keys tie. A free implementation slot always
+admits the first returned candidate.
 
 Review work never preempts an agent Activity that is already running. It wins
 at the next available slot. A task waiting for pull request review or merge
@@ -201,7 +216,8 @@ than silently falling back to `yx`.
 The implementation should include:
 
 - Unit tests for backend candidate ordering and invalid priority handling.
-- Unit tests proving review candidates precede implementation candidates.
+- Unit tests proving root metadata inheritance, deepest-first ordering, and
+  final-root review gating.
 - Dispatcher workflow tests for slot admission, reconciliation, and duplicate
   workflow IDs.
 - Work-item workflow tests for claim, failure release, cancellation, review
