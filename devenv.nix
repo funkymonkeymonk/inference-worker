@@ -1,7 +1,35 @@
-{pkgs, ...}: {
+{pkgs, ...}: let
+  tempoRelease =
+    if pkgs.stdenv.hostPlatform.system == "aarch64-darwin"
+    then {
+      url = "https://github.com/galaxy-io/tempo/releases/download/v0.1.14/tempo_darwin_arm64.tar.gz";
+      hash = "sha256-/ihnOm9BbvCriiw4Yfti6+GbflluvBqC+SLF1EF6Vh0=";
+    }
+    else if pkgs.stdenv.hostPlatform.system == "x86_64-linux"
+    then {
+      url = "https://github.com/galaxy-io/tempo/releases/download/v0.1.14/tempo_linux_amd64.tar.gz";
+      hash = "sha256-rBPy48PBmN9gL4H9CUMujW3LlzBEQidj0avnaidGQKo=";
+    }
+    else throw "tempo does not provide a binary for ${pkgs.stdenv.hostPlatform.system}";
+
+  tempo = pkgs.stdenv.mkDerivation {
+    pname = "tempo";
+    version = "0.1.14";
+    src = pkgs.fetchurl tempoRelease;
+    sourceRoot = ".";
+    dontConfigure = true;
+    dontBuild = true;
+
+    installPhase = ''
+      install -Dm755 tempo $out/bin/tempo
+    '';
+  };
+
+in {
   packages = [
     pkgs.nodejs
     pkgs.temporal-cli
+    tempo
   ];
 
   services.temporal = {
