@@ -76,6 +76,21 @@ in {
       '';
     };
 
+    "dispatch:run-once" = {
+      description = "Start one worker and dispatch one eligible yak";
+      exec = ''
+        temporal operator cluster health --address "''${TEMPORAL_ADDRESS:-127.0.0.1:7233}" &&
+        npm run build && {
+          task_queue="manual-dispatch-$$"
+          DISPATCHER_ENABLED=false TEMPORAL_TASK_QUEUE="$task_queue" WORKER_ACTIVITY_SLOTS=1 npm start &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true; wait "$worker_pid" 2>/dev/null || true' EXIT INT TERM
+          sleep 1
+          TEMPORAL_TASK_QUEUE="$task_queue" npm run dispatch
+        }
+      '';
+    };
+
     "worker:start" = {
       description = "Start the Temporal worker";
       exec = "npm start";

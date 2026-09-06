@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "node dist/worker.js",
     "client": "node dist/client.js",
+    "dispatch": "node dist/dispatch.js",
     "dev": "tsx src/worker.ts",
     "test": "tsx --test src/**/*.test.ts",
     "test:integration": "tsx --test --test-concurrency=1 integration/**/*.test.ts",
