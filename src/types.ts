@@ -105,6 +105,7 @@ export interface DispatcherInput {
   pollIntervalMs?: number;
   maxConcurrentImplementations: number;
   runOnce?: boolean;
+  state?: DispatcherState;
 }
 
 export interface DispatcherState {

@@ -17,7 +17,9 @@ const worker = await Worker.create({
   taskQueue,
   workflowsPath: new URL("./workflows/index.js", import.meta.url).pathname,
   activities,
-  maxConcurrentActivityTaskExecutions: Number(process.env.WORKER_ACTIVITY_SLOTS ?? 1),
+  maxConcurrentActivityTaskExecutions: Number(
+    process.env.WORKER_ACTIVITY_SLOTS ?? process.env.DISPATCHER_MAX_CONCURRENT_IMPLEMENTATIONS ?? 1,
+  ),
 });
 const clientConnection = await Connection.connect({ address });
 const client = new Client({ connection: clientConnection, namespace });
