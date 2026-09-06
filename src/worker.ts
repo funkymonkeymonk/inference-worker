@@ -3,6 +3,7 @@ import { Connection, Client, WorkflowExecutionAlreadyStartedError } from "@tempo
 import * as activities from "./activities/index.js";
 import { WorkDispatcherWorkflow } from "./workflows/dispatcher.js";
 import { temporalAddressFromEnvironment } from "./temporal-address.js";
+import { dispatcherWorkflowId } from "./workflow-id.js";
 
 const address = temporalAddressFromEnvironment();
 const namespace = process.env.TEMPORAL_NAMESPACE ?? "inference";
@@ -24,7 +25,8 @@ const worker = await Worker.create({
 });
 const clientConnection = await Connection.connect({ address });
 const client = new Client({ connection: clientConnection, namespace });
-const dispatcherWorkflowId = process.env.DISPATCHER_WORKFLOW_ID ?? `dispatcher-${encodeURIComponent(repositoryRoot)}`;
+const configuredDispatcherWorkflowId = process.env.DISPATCHER_WORKFLOW_ID;
+const workflowId = configuredDispatcherWorkflowId ?? dispatcherWorkflowId(repositoryRoot);
 if (process.env.DISPATCHER_ENABLED !== "false") {
   try {
     await client.workflow.start(WorkDispatcherWorkflow, {
@@ -33,7 +35,7 @@ if (process.env.DISPATCHER_ENABLED !== "false") {
         maxConcurrentImplementations: Number(process.env.DISPATCHER_MAX_CONCURRENT_IMPLEMENTATIONS ?? 1),
       }],
       taskQueue,
-      workflowId: dispatcherWorkflowId,
+      workflowId,
     });
   } catch (error) {
     if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
