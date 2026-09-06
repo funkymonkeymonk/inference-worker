@@ -2,8 +2,9 @@ import { NativeConnection, Worker } from "@temporalio/worker";
 import { Connection, Client, WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
 import * as activities from "./activities/index.js";
 import { WorkDispatcherWorkflow } from "./workflows/dispatcher.js";
+import { temporalAddressFromEnvironment } from "./temporal-address.js";
 
-const address = process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
+const address = temporalAddressFromEnvironment();
 const namespace = process.env.TEMPORAL_NAMESPACE ?? "inference";
 const taskQueue = process.env.TEMPORAL_TASK_QUEUE ?? "inference-worker";
 const repositoryRoot = process.env.REPOSITORY_ROOT ?? process.cwd();

@@ -2,6 +2,7 @@ import { Connection, Client } from "@temporalio/client";
 import { randomUUID } from "node:crypto";
 import { WorkDispatcherWorkflow } from "./workflows/dispatcher.js";
 import { TASK_QUEUE, type DispatcherInput } from "./types.js";
+import { temporalAddressFromEnvironment } from "./temporal-address.js";
 
 export function dispatcherInputFromEnvironment(environment: NodeJS.ProcessEnv = process.env): DispatcherInput {
   return {
@@ -12,7 +13,7 @@ export function dispatcherInputFromEnvironment(environment: NodeJS.ProcessEnv = 
 }
 
 export async function runManualDispatch(): Promise<void> {
-  const address = process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
+  const address = temporalAddressFromEnvironment();
   const namespace = process.env.TEMPORAL_NAMESPACE ?? "inference";
   const connection = await Connection.connect({ address });
   try {

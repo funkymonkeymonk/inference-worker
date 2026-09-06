@@ -8,10 +8,11 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { Connection, Client } from "@temporalio/client";
 import test from "node:test";
+import { temporalAddressFromEnvironment } from "../dist/temporal-address.js";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = process.cwd();
-const temporalAddress = process.env.INTEGRATION_TEMPORAL_ADDRESS ?? process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
+const temporalAddress = process.env.INTEGRATION_TEMPORAL_ADDRESS ?? temporalAddressFromEnvironment();
 const temporalNamespace = process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? process.env.TEMPORAL_NAMESPACE ?? "inference";
 
 function sse(events: unknown[]): string {
@@ -69,7 +70,7 @@ test("devenv worker dispatches and completes a real yak", async () => {
       cwd: repositoryRoot,
       env: {
         ...process.env,
-        TEMPORAL_ADDRESS: process.env.INTEGRATION_TEMPORAL_ADDRESS ?? process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233",
+        TEMPORAL_ADDRESS: temporalAddress,
         TEMPORAL_NAMESPACE: process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? process.env.TEMPORAL_NAMESPACE ?? "inference",
         TEMPORAL_TASK_QUEUE: `integration-worker-${suffix}`,
         DISPATCHER_WORKFLOW_ID: dispatcherWorkflowId,

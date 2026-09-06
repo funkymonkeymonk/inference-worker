@@ -8,8 +8,9 @@ import { Connection, Client } from "@temporalio/client";
 import { NativeConnection, Worker } from "@temporalio/worker";
 import * as activities from "../dist/activities/index.js";
 import { WorkItemWorkflow } from "../dist/workflows/work-item.js";
+import { temporalAddressFromEnvironment } from "../dist/temporal-address.js";
 
-const temporalAddress = process.env.INTEGRATION_TEMPORAL_ADDRESS ?? process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
+const temporalAddress = process.env.INTEGRATION_TEMPORAL_ADDRESS ?? temporalAddressFromEnvironment();
 const temporalNamespace = process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? process.env.TEMPORAL_NAMESPACE ?? "inference";
 
 function sse(events: unknown[]): string {
