@@ -101,4 +101,16 @@ export interface TaskBackend {
   attachPullRequest(id: string, url: string): Promise<void>;
 }
 
+export interface DispatcherInput {
+  pollIntervalMs?: number;
+  maxConcurrentImplementations: number;
+  runOnce?: boolean;
+}
+
+export interface DispatcherState {
+  activeTaskIds: string[];
+  completedTaskIds: string[];
+  failedTaskIds: string[];
+}
+
 export const TASK_QUEUE = "inference-worker";

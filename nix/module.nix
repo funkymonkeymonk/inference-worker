@@ -29,6 +29,36 @@ in {
       description = "Temporal task queue polled by the worker.";
     };
 
+    repositoryRoot = lib.mkOption {
+      type = lib.types.path;
+      description = "Repository containing the yaks and agent workspaces.";
+      example = "/Users/me/src/project";
+    };
+
+    taskBackend = lib.mkOption {
+      type = lib.types.enum ["yx"];
+      default = "yx";
+      description = "Configured task backend.";
+    };
+
+    dispatcher = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = "Start the repository's singleton task dispatcher workflow.";
+      };
+      pollIntervalMs = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 60000;
+        description = "Dispatcher polling interval in milliseconds.";
+      };
+      maxConcurrentImplementations = lib.mkOption {
+        type = lib.types.ints.positive;
+        default = 1;
+        description = "Maximum concurrent implementation workflows.";
+      };
+    };
+
     inference.endpoint = lib.mkOption {
       type = lib.types.str;
       description = "OpenAI-compatible inference endpoint.";
@@ -41,11 +71,12 @@ in {
       description = "Maximum number of inference Activities executed concurrently.";
     };
 
-    workingDirectory = lib.mkOption {
+    home = lib.mkOption {
       type = lib.types.path;
       default = "/var/empty";
-      description = "Working directory for the worker process.";
+      description = "HOME for task tools and launchd execution.";
     };
+
   };
 
   config = lib.mkIf cfg.enable {
@@ -54,7 +85,7 @@ in {
       serviceConfig = {
         RunAtLoad = true;
         KeepAlive = true;
-        WorkingDirectory = cfg.workingDirectory;
+      WorkingDirectory = cfg.repositoryRoot;
         StandardOutPath = "/tmp/inference-worker.log";
         StandardErrorPath = "/tmp/inference-worker.error.log";
         EnvironmentVariables = {
@@ -63,6 +94,13 @@ in {
           TEMPORAL_NAMESPACE = cfg.temporal.namespace;
           TEMPORAL_TASK_QUEUE = cfg.taskQueue;
           WORKER_ACTIVITY_SLOTS = toString cfg.maxConcurrentActivities;
+          REPOSITORY_ROOT = cfg.repositoryRoot;
+          TASK_BACKEND = cfg.taskBackend;
+          DISPATCHER_ENABLED = lib.boolToString cfg.dispatcher.enable;
+          DISPATCHER_POLL_INTERVAL_MS = toString cfg.dispatcher.pollIntervalMs;
+          DISPATCHER_MAX_CONCURRENT_IMPLEMENTATIONS = toString cfg.dispatcher.maxConcurrentImplementations;
+          HOME = cfg.home;
+          PATH = "/run/current-system/sw/bin:/usr/bin:/bin";
         };
       };
     };

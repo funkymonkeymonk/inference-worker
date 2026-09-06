@@ -1,9 +1,14 @@
 import { NativeConnection, Worker } from "@temporalio/worker";
+import { Connection, Client, WorkflowExecutionAlreadyStartedError } from "@temporalio/client";
 import * as activities from "./activities/index.js";
+import { WorkDispatcherWorkflow } from "./workflows/dispatcher.js";
 
 const address = process.env.TEMPORAL_ADDRESS ?? "127.0.0.1:7233";
 const namespace = process.env.TEMPORAL_NAMESPACE ?? "inference";
 const taskQueue = process.env.TEMPORAL_TASK_QUEUE ?? "inference-worker";
+const repositoryRoot = process.env.REPOSITORY_ROOT ?? process.cwd();
+const taskBackend = process.env.TASK_BACKEND ?? "yx";
+if (taskBackend !== "yx") throw new Error(`unsupported task backend: ${taskBackend}`);
 
 const connection = await NativeConnection.connect({ address });
 const worker = await Worker.create({
@@ -14,10 +19,28 @@ const worker = await Worker.create({
   activities,
   maxConcurrentActivityTaskExecutions: Number(process.env.WORKER_ACTIVITY_SLOTS ?? 1),
 });
+const clientConnection = await Connection.connect({ address });
+const client = new Client({ connection: clientConnection, namespace });
+const dispatcherWorkflowId = `dispatcher-${encodeURIComponent(repositoryRoot)}`;
+if (process.env.DISPATCHER_ENABLED !== "false") {
+  try {
+    await client.workflow.start(WorkDispatcherWorkflow, {
+      args: [{
+        pollIntervalMs: Number(process.env.DISPATCHER_POLL_INTERVAL_MS ?? 60_000),
+        maxConcurrentImplementations: Number(process.env.DISPATCHER_MAX_CONCURRENT_IMPLEMENTATIONS ?? 1),
+      }],
+      taskQueue,
+      workflowId: dispatcherWorkflowId,
+    });
+  } catch (error) {
+    if (!(error instanceof WorkflowExecutionAlreadyStartedError)) throw error;
+  }
+}
 
 const shutdown = async () => {
   await worker.shutdown();
   await connection.close();
+  await clientConnection.close();
 };
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
