@@ -8,7 +8,8 @@
     "start": "node dist/worker.js",
     "client": "node dist/client.js",
     "dev": "tsx src/worker.ts",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "test:integration": "tsx --test integration/**/*.test.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",

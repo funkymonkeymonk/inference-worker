@@ -30,6 +30,15 @@
       exec = "npm test";
     };
 
+    "integration:test" = {
+      description = "Build and run the Temporal WorkItem integration test (start devenv up -d first, or set INTEGRATION_TEMPORAL_ADDRESS)";
+      exec = ''
+        temporal operator cluster health --address "''${INTEGRATION_TEMPORAL_ADDRESS:-127.0.0.1:7233}" && \
+        npm run build && \
+        npm run test:integration
+      '';
+    };
+
     "worker:start" = {
       description = "Start the Temporal worker";
       exec = "npm start";
