@@ -21,7 +21,7 @@ const worker = await Worker.create({
 });
 const clientConnection = await Connection.connect({ address });
 const client = new Client({ connection: clientConnection, namespace });
-const dispatcherWorkflowId = `dispatcher-${encodeURIComponent(repositoryRoot)}`;
+const dispatcherWorkflowId = process.env.DISPATCHER_WORKFLOW_ID ?? `dispatcher-${encodeURIComponent(repositoryRoot)}`;
 if (process.env.DISPATCHER_ENABLED !== "false") {
   try {
     await client.workflow.start(WorkDispatcherWorkflow, {

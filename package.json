@@ -9,7 +9,8 @@
     "client": "node dist/client.js",
     "dev": "tsx src/worker.ts",
     "test": "tsx --test src/**/*.test.ts",
-    "test:integration": "tsx --test integration/**/*.test.ts"
+    "test:integration": "tsx --test --test-concurrency=1 integration/**/*.test.ts",
+    "test:worker-integration": "tsx --test --test-concurrency=1 integration/worker-shaves-yak.test.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",

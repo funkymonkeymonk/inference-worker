@@ -39,6 +39,15 @@
       '';
     };
 
+    "integration:worker-shaves-yak" = {
+      description = "Start the worker and verify it dispatches and completes a temporary yx yak";
+      exec = ''
+        temporal operator cluster health --address "''${INTEGRATION_TEMPORAL_ADDRESS:-127.0.0.1:7233}" && \
+        npm run build && \
+        npm run test:worker-integration
+      '';
+    };
+
     "worker:start" = {
       description = "Start the Temporal worker";
       exec = "npm start";
