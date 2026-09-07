@@ -54,7 +54,7 @@ test("continues a streamed tool call with the tool result", async () => {
 
   assert.equal(result.text, "The notes contain contract notes.");
   assert.equal(requests.length, 2);
-  assert.equal(requests[0].max_tokens, 8192);
+  assert.equal(requests[0].max_tokens, 16384);
   assert.equal((requests[0].messages[0] as { role: string }).role, "system");
   assert.match((requests[0].messages[0] as { content: string }).content, /provided workspace/);
   assert.match((requests[0].messages[0] as { content: string }).content, /write or edit/);

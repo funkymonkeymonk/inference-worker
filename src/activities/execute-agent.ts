@@ -13,7 +13,7 @@ import type {
 const execFileAsync = promisify(execFile);
 const DEFAULT_BASH_TIMEOUT_MS = 30_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
-const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+const DEFAULT_MAX_OUTPUT_TOKENS = 16384;
 const MAX_BASH_OUTPUT_BYTES = 1024 * 1024;
 const IGNORED_DIRECTORY_NAMES = new Set([".git", ".yaks", ".devenv", "node_modules", "__pycache__"]);
 const TOOL_SCHEMAS: Record<AgentToolName, object> = {
