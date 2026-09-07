@@ -98,6 +98,29 @@ Reject non-positive, non-integer, or unsafe values at worker startup. Preserve e
 3. Verify an independent yak is admitted after a failed parent is split.
 4. Run the integration suite and document the exact monitoring and unblock commands.
 
+### Monitoring And Unblocking
+
+Inspect the parent, failure history, and generated children with:
+
+```bash
+yx list --format json
+yx context <parent-yak-id> --show
+temporal workflow show --workflow-id <dispatcher-workflow-id>
+```
+
+After human review, remove the failure block and return the yak to the queue:
+
+```bash
+yx tag remove <yak-id> @implementation-failed
+yx state <yak-id> todo
+```
+
+Terminate a stale test or development dispatcher with:
+
+```bash
+temporal workflow terminate --workflow-id <dispatcher-workflow-id>
+```
+
 ## Verification
 
 Run, in order:

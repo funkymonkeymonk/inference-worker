@@ -92,3 +92,101 @@ test("dispatcher admits a backend candidate into a WorkItem child workflow", asy
     await new Promise<void>((resolve, reject) => inferenceServer.close((error) => error ? reject(error) : resolve()));
   }
 });
+
+test("does not split a maximum-depth failure and still admits an independent yak", async () => {
+  const nativeConnection = await NativeConnection.connect({ address: temporalAddress });
+  const clientConnection = await Connection.connect({ address: temporalAddress });
+  const taskQueue = `integration-depth-${process.pid}-${Date.now()}`;
+  const maximumDepthId = `maximum-depth-${Date.now()}`;
+  const independentId = `independent-${Date.now()}`;
+  const candidates = [
+    {
+      id: maximumDepthId,
+      title: "fail at maximum depth",
+      context: "This candidate must remain blocked for human review.",
+      kind: "implementation" as const,
+      rootDepth: 2,
+      workflowInput: {
+        taskId: maximumDepthId,
+        title: "fail at maximum depth",
+        context: "This candidate must remain blocked for human review.",
+        repositoryRoot: os.tmpdir(),
+        policy: { model: "integration-model", allowedTools: [], maxRunTimeSeconds: 1 },
+      },
+    },
+    {
+      id: independentId,
+      title: "complete independent yak",
+      context: "This candidate remains eligible.",
+      kind: "implementation" as const,
+      rootDepth: 0,
+      workflowInput: {
+        taskId: independentId,
+        title: "complete independent yak",
+        context: "This candidate remains eligible.",
+        repositoryRoot: os.tmpdir(),
+        policy: { model: "integration-model", allowedTools: [], maxRunTimeSeconds: 1 },
+      },
+    },
+  ];
+  let listCalls = 0;
+  const failures: string[] = [];
+  const plannerCalls: unknown[] = [];
+  const splitCalls: unknown[] = [];
+  const worker = await Worker.create({
+    connection: nativeConnection,
+    namespace: temporalNamespace,
+    taskQueue,
+    workflowsPath: new URL("../dist/workflows/index.js", import.meta.url).pathname,
+    activities: {
+      createWorkspace: async () => ({ workspacePath: os.tmpdir(), workspaceName: "integration", workspaceMode: "copy" as const }),
+      cleanupWorkspace: async () => undefined,
+      listDispatchCandidates: async () => {
+        listCalls += 1;
+        return listCalls === 1 ? candidates : [candidates[1]];
+      },
+      claimTask: async () => undefined,
+      recordTaskFailure: async (id: string) => { failures.push(id); },
+      markTaskDone: async () => undefined,
+      executeAgent: async (input: { task: string }) => {
+        if (input.task.includes("maximum depth")) throw new Error("agent timed out");
+        return { completed: true, text: "done", toolCalls: 0 };
+      },
+      planYakSplit: async (input: unknown) => { plannerCalls.push(input); return { proposals: [] }; },
+      splitTask: async (input: unknown) => { splitCalls.push(input); },
+    },
+  });
+  const workerRun = worker.run();
+  const workflowId = `integration-depth-${Date.now()}`;
+  try {
+    const client = new Client({ connection: clientConnection, namespace: temporalNamespace });
+    await client.workflow.start(WorkDispatcherWorkflow, {
+      args: [{ maxConcurrentImplementations: 1, pollIntervalMs: 25, splitPolicy: {
+        enabled: true,
+        maxRootDepth: 2,
+        maxChildren: 2,
+        planner: { model: "planner", maxRunTimeSeconds: 1, maxOutputTokens: 100 },
+      } }],
+      taskQueue,
+      workflowId,
+    });
+    const handle = client.workflow.getHandle(workflowId);
+    const deadline = Date.now() + 10_000;
+    let state;
+    while (Date.now() < deadline) {
+      state = await handle.query("state");
+      if (state.completedTaskIds.includes(independentId)) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.ok(state?.completedTaskIds.includes(independentId));
+    assert.deepEqual(failures, [maximumDepthId]);
+    assert.deepEqual(plannerCalls, []);
+    assert.deepEqual(splitCalls, []);
+    await handle.terminate("integration test cleanup");
+  } finally {
+    await worker.shutdown();
+    await workerRun;
+    await nativeConnection.close();
+    await clientConnection.close();
+  }
+});
