@@ -4,6 +4,7 @@ import * as activities from "./activities/index.js";
 import { WorkDispatcherWorkflow } from "./workflows/dispatcher.js";
 import { temporalAddressFromEnvironment } from "./temporal-address.js";
 import { dispatcherWorkflowId } from "./workflow-id.js";
+import { shutdownWorker } from "./worker-shutdown.js";
 
 const address = temporalAddressFromEnvironment();
 const namespace = process.env.TEMPORAL_NAMESPACE ?? "inference";
@@ -42,11 +43,8 @@ if (process.env.DISPATCHER_ENABLED !== "false") {
   }
 }
 
-const shutdown = async () => {
-  await worker.shutdown();
-  await connection.close();
-  await clientConnection.close();
-};
+const workerRun = worker.run();
+const shutdown = () => shutdownWorker(worker, workerRun, [connection, clientConnection]);
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
-await worker.run();
+await workerRun;
