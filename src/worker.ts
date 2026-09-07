@@ -5,6 +5,7 @@ import { WorkDispatcherWorkflow } from "./workflows/dispatcher.js";
 import { temporalAddressFromEnvironment } from "./temporal-address.js";
 import { dispatcherWorkflowId } from "./workflow-id.js";
 import { shutdownWorker } from "./worker-shutdown.js";
+import { configFromEnvironment, dispatcherSplitPolicyFromConfig } from "./config.js";
 
 const address = temporalAddressFromEnvironment();
 const namespace = process.env.TEMPORAL_NAMESPACE ?? "inference";
@@ -12,6 +13,7 @@ const taskQueue = process.env.TEMPORAL_TASK_QUEUE ?? "inference-worker";
 const repositoryRoot = process.env.REPOSITORY_ROOT ?? process.cwd();
 const taskBackend = process.env.TASK_BACKEND ?? "yx";
 if (taskBackend !== "yx") throw new Error(`unsupported task backend: ${taskBackend}`);
+const config = configFromEnvironment();
 
 const connection = await NativeConnection.connect({ address });
 const worker = await Worker.create({
@@ -33,8 +35,9 @@ if (process.env.DISPATCHER_ENABLED !== "false") {
     await client.workflow.start(WorkDispatcherWorkflow, {
       args: [{
         pollIntervalMs: Number(process.env.DISPATCHER_POLL_INTERVAL_MS ?? 60_000),
-        maxConcurrentImplementations: Number(process.env.DISPATCHER_MAX_CONCURRENT_IMPLEMENTATIONS ?? 1),
-      }],
+         maxConcurrentImplementations: Number(process.env.DISPATCHER_MAX_CONCURRENT_IMPLEMENTATIONS ?? 1),
+         splitPolicy: dispatcherSplitPolicyFromConfig(config),
+       }],
       taskQueue,
       workflowId,
     });

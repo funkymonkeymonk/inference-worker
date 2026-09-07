@@ -2,24 +2,29 @@ import {
   continueAsNew,
   defineQuery,
   executeChild,
+  log,
   proxyActivities,
   setHandler,
   sleep,
   workflowInfo,
 } from "@temporalio/workflow";
 import { DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS } from "../types.js";
-import type { DispatchCandidate, DispatcherInput, DispatcherState, WorkItemInput } from "../types.js";
+import type { DispatchCandidate, DispatcherInput, DispatcherState, PlanYakSplitInput, SplitPlan, SplitTaskInput, WorkItemInput } from "../types.js";
 import { WorkItemWorkflow } from "./work-item.js";
 
 interface DispatcherActivities {
   listDispatchCandidates(input: { excludeIds: string[]; limit: number }): Promise<DispatchCandidate[]>;
   claimTask(id: string): Promise<void>;
   recordTaskFailure(id: string, reason: string): Promise<void>;
+  planYakSplit(input: PlanYakSplitInput): Promise<SplitPlan>;
+  splitTask(input: SplitTaskInput): Promise<void>;
   markTaskDone(id: string): Promise<void>;
 }
 
-const { listDispatchCandidates, claimTask, recordTaskFailure, markTaskDone } = proxyActivities<DispatcherActivities>({
-  startToCloseTimeout: "5 minutes",
+export const dispatcherActivityStartToCloseTimeout = "2 hours";
+
+const { listDispatchCandidates, claimTask, recordTaskFailure, planYakSplit, splitTask, markTaskDone } = proxyActivities<DispatcherActivities>({
+  startToCloseTimeout: dispatcherActivityStartToCloseTimeout,
   retry: { maximumAttempts: 1 },
 });
 
@@ -67,7 +72,28 @@ export async function WorkDispatcherWorkflow(input: DispatcherInput): Promise<Di
           state.completedTaskIds.push(candidate.id);
         } catch (error) {
           state.failedTaskIds.push(candidate.id);
-          await recordTaskFailure(candidate.id, failureReason(error));
+          const reason = failureReason(error);
+          await recordTaskFailure(candidate.id, reason);
+          const splitPolicy = input.splitPolicy;
+          if (splitPolicy?.enabled && candidate.rootDepth !== undefined && candidate.rootDepth < splitPolicy.maxRootDepth && splitPolicy.maxChildren >= 2) {
+            try {
+              const plan = await planYakSplit({
+                title: candidate.title,
+                context: candidate.context,
+                failureReason: reason,
+                currentRootDepth: candidate.rootDepth,
+                maxRootDepth: splitPolicy.maxRootDepth,
+                maxChildren: splitPolicy.maxChildren,
+                policy: splitPolicy.planner,
+              });
+              await splitTask({ taskId: candidate.id, failureReason: reason, plan });
+            } catch (splitError) {
+              log.warn("automatic yak split failed", {
+                taskId: candidate.id,
+                error: failureReason(splitError),
+              });
+            }
+          }
         } finally {
           state.activeTaskIds.splice(state.activeTaskIds.indexOf(candidate.id), 1);
         }

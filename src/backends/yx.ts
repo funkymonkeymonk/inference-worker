@@ -125,7 +125,7 @@ export class YxTaskBackend implements TaskBackend {
       const rightCreated = right.yak.createdAt ?? "";
       return leftCreated.localeCompare(rightCreated) || left.yak.id.localeCompare(right.yak.id);
     });
-    return records.slice(0, input.limit).map(({ yak, kind }) => ({
+    return records.slice(0, input.limit).map(({ yak, kind, depth }) => ({
       id: yak.id,
       title: yak.name,
       context: yak.context ?? "",
@@ -137,6 +137,7 @@ export class YxTaskBackend implements TaskBackend {
         repositoryRoot: this.repositoryRoot,
         policy: this.policy,
       },
+      rootDepth: depth,
     }));
   }
 

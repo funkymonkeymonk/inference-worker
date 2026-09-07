@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { configFromEnvironment } from "./config.js";
+import { configFromEnvironment, dispatcherSplitPolicyFromConfig } from "./config.js";
 
 test("uses safe defaults for worker policy", () => {
   const config = configFromEnvironment({ AGENT_MODEL: "agent-default" });
@@ -54,6 +54,16 @@ test("preserves explicit policy overrides", () => {
 
 test("defaults the planner model to the agent model", () => {
   assert.equal(configFromEnvironment({ AGENT_MODEL: "shared-model" }).dispatcher.plannerModel, "shared-model");
+});
+
+test("builds one serializable dispatcher split policy from worker config", () => {
+  const config = configFromEnvironment({ AGENT_MODEL: "agent", DISPATCHER_PLANNER_MODEL: "planner" });
+  assert.deepEqual(dispatcherSplitPolicyFromConfig(config), {
+    enabled: true,
+    maxRootDepth: 10,
+    maxChildren: 5,
+    planner: { model: "planner", maxRunTimeSeconds: 600, maxOutputTokens: 4096 },
+  });
 });
 
 test("rejects invalid policy values", () => {

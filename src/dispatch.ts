@@ -3,12 +3,15 @@ import { randomUUID } from "node:crypto";
 import { WorkDispatcherWorkflow } from "./workflows/dispatcher.js";
 import { TASK_QUEUE, type DispatcherInput } from "./types.js";
 import { temporalAddressFromEnvironment } from "./temporal-address.js";
+import { configFromEnvironment, dispatcherSplitPolicyFromConfig } from "./config.js";
 
 export function dispatcherInputFromEnvironment(environment: NodeJS.ProcessEnv = process.env): DispatcherInput {
+  const config = configFromEnvironment(environment);
   return {
     maxConcurrentImplementations: 1,
     pollIntervalMs: Number(environment.DISPATCHER_POLL_INTERVAL_MS ?? 60_000),
     runOnce: true,
+    splitPolicy: dispatcherSplitPolicyFromConfig(config),
   };
 }
 

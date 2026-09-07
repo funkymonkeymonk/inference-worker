@@ -12,6 +12,12 @@ test("manual dispatch runs one reconciliation with one implementation slot", () 
       maxConcurrentImplementations: 1,
       pollIntervalMs: 1500,
       runOnce: true,
+      splitPolicy: {
+        enabled: true,
+        maxRootDepth: 10,
+        maxChildren: 5,
+        planner: { model: "omlx/qwen3.8-27b", maxRunTimeSeconds: 600, maxOutputTokens: 4096 },
+      },
     },
   );
 });

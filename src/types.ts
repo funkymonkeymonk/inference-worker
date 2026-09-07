@@ -129,6 +129,14 @@ export interface DispatchCandidate {
   context: string;
   kind: DispatchCandidateKind;
   workflowInput: WorkItemInput;
+  rootDepth?: number;
+}
+
+export interface DispatcherSplitPolicy {
+  enabled: boolean;
+  maxRootDepth: number;
+  maxChildren: number;
+  planner: PlannerPolicy;
 }
 
 export interface TaskBackend {
@@ -147,6 +155,7 @@ export interface DispatcherInput {
   maxConcurrentImplementations: number;
   runOnce?: boolean;
   state?: DispatcherState;
+  splitPolicy?: DispatcherSplitPolicy;
 }
 
 export interface DispatcherState {

@@ -1,4 +1,4 @@
-import { DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS } from "./types.js";
+import { DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS, type DispatcherSplitPolicy } from "./types.js";
 
 const DEFAULT_AGENT_MODEL = "omlx/qwen3.8-27b";
 
@@ -60,6 +60,19 @@ export function configFromEnvironment(environment: NodeJS.ProcessEnv = process.e
       plannerModel: modelValue(environment, "DISPATCHER_PLANNER_MODEL", agentModel),
       plannerMaxRunTimeSeconds: positiveInteger(environment, "DISPATCHER_PLANNER_MAX_RUN_TIME_SECONDS", 600),
       plannerMaxOutputTokens: positiveInteger(environment, "DISPATCHER_PLANNER_MAX_OUTPUT_TOKENS", 4096),
+    },
+  };
+}
+
+export function dispatcherSplitPolicyFromConfig(config: WorkerConfig): DispatcherSplitPolicy {
+  return {
+    enabled: config.dispatcher.splitEnabled,
+    maxRootDepth: config.dispatcher.maxYakDepth,
+    maxChildren: config.dispatcher.maxSplitChildren,
+    planner: {
+      model: config.dispatcher.plannerModel,
+      maxRunTimeSeconds: config.dispatcher.plannerMaxRunTimeSeconds,
+      maxOutputTokens: config.dispatcher.plannerMaxOutputTokens,
     },
   };
 }
