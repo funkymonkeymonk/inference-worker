@@ -1,15 +1,18 @@
 import type { AgentToolName, DispatchCandidate, TaskBackend } from "../types.js";
 import { YxTaskBackend } from "../backends/yx.js";
+import { configFromEnvironment } from "../config.js";
 
 function configuredBackend(): TaskBackend {
+  const config = configFromEnvironment();
   const backendName = process.env.TASK_BACKEND ?? "yx";
   if (backendName !== "yx") throw new Error(`unsupported task backend: ${backendName}`);
   return new YxTaskBackend({
     repositoryRoot: process.env.REPOSITORY_ROOT ?? process.cwd(),
     policy: {
-      model: process.env.AGENT_MODEL ?? "omlx/qwen3.8-27b",
-       allowedTools: ["read", "write", "edit", "bash", "listToolFiles"] as AgentToolName[],
-      maxRunTimeSeconds: Number(process.env.AGENT_MAX_RUN_TIME_SECONDS ?? 7200),
+      model: config.agent.model,
+      allowedTools: ["read", "write", "edit", "bash", "listToolFiles"] as AgentToolName[],
+      maxRunTimeSeconds: config.agent.maxRunTimeSeconds,
+      cleanupGraceSeconds: config.agent.cleanupGraceSeconds,
     },
   });
 }

@@ -186,3 +186,46 @@ test("cleans the isolated workspace when the workflow is cancelled", async () =>
     await environment.teardown();
   }
 });
+
+test("times out an agent using the configured wall-clock limit and cleans its workspace", async () => {
+  const environment = await TestWorkflowEnvironment.createLocal();
+  const cleaned: string[] = [];
+  const worker = await Worker.create({
+    connection: environment.nativeConnection,
+    namespace: environment.namespace,
+    taskQueue: "work-item-timeout-test",
+    workflowsPath: new URL("./work-item.ts", import.meta.url).pathname,
+    activities: {
+      createWorkspace: async () => ({ workspacePath: "/tmp/work-item-timeout", workspaceName: "run-timeout" }),
+      cleanupWorkspace: async (input: { workspacePath: string }) => { cleaned.push(input.workspacePath); },
+      executeAgent: async () => {
+        const signal = Context.current().cancellationSignal;
+        return await new Promise<never>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      },
+    },
+  });
+  const run = worker.run();
+  try {
+    await assert.rejects(
+      environment.client.workflow.execute(WorkItemWorkflow, {
+        args: [{
+          taskId: "yak-timeout",
+          title: "Timeout",
+          context: "Timeout",
+          repositoryRoot: "/workspace/project",
+          policy: { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 1 },
+        }],
+        taskQueue: "work-item-timeout-test",
+        workflowId: "work-item-timeout",
+      }),
+      (error: unknown) => errorChainMessages(error).some((message) => /timed out|timeout/i.test(message)),
+    );
+    assert.deepEqual(cleaned, ["/tmp/work-item-timeout"]);
+  } finally {
+    worker.shutdown();
+    await run;
+    await environment.teardown();
+  }
+});

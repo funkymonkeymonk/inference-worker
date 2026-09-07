@@ -2,9 +2,12 @@ import { CancellationScope, defineQuery, log, proxyActivities, setHandler } from
 import type { ExecuteAgentInput, ExecuteAgentResult, WorkItemInput, WorkItemState } from "../types.js";
 import type { CleanupWorkspaceInput, CreateWorkspaceInput, WorkspaceInfo } from "../activities/workspace.js";
 
-interface WorkItemActivities {
+interface WorkspaceActivities {
   createWorkspace(input: CreateWorkspaceInput): Promise<WorkspaceInfo>;
   cleanupWorkspace(input: CleanupWorkspaceInput): Promise<void>;
+}
+
+interface AgentActivities {
   executeAgent(input: ExecuteAgentInput): Promise<ExecuteAgentResult>;
 }
 
@@ -13,8 +16,8 @@ function failureMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-const { createWorkspace, cleanupWorkspace, executeAgent } = proxyActivities<WorkItemActivities>({
-  startToCloseTimeout: "2 hours",
+const { createWorkspace, cleanupWorkspace } = proxyActivities<WorkspaceActivities>({
+  startToCloseTimeout: "5 minutes",
   heartbeatTimeout: "2 minutes",
   retry: { maximumAttempts: 1 },
 });
@@ -22,6 +25,11 @@ const { createWorkspace, cleanupWorkspace, executeAgent } = proxyActivities<Work
 export const workItemStateQuery = defineQuery<WorkItemState>("state");
 
 export async function WorkItemWorkflow(input: WorkItemInput): Promise<WorkItemState> {
+  const { executeAgent } = proxyActivities<AgentActivities>({
+    startToCloseTimeout: input.policy.maxRunTimeSeconds * 1000,
+    heartbeatTimeout: "2 minutes",
+    retry: { maximumAttempts: 1 },
+  });
   let state: WorkItemState = {
     taskId: input.taskId,
     phase: "agent",

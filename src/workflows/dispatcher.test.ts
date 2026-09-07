@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { Worker } from "@temporalio/worker";
-import { compactDispatcherState, dispatchExclusions, WorkDispatcherWorkflow } from "./dispatcher.js";
+import { compactDispatcherState, dispatchExclusions, workItemExecutionTimeout, WorkDispatcherWorkflow } from "./dispatcher.js";
 import type { DispatchCandidate, WorkItemInput } from "../types.js";
 
 test("excludes active tasks while backend tags control failed-task blocking", () => {
@@ -17,6 +17,11 @@ test("compacts completed and failed task history before continuing as new", () =
     compactDispatcherState({ activeTaskIds: ["active"], completedTaskIds: ["done"], failedTaskIds: ["failed"] }),
     { activeTaskIds: ["active"], completedTaskIds: [], failedTaskIds: [] },
   );
+});
+
+test("derives the child workflow execution timeout from the candidate policy", () => {
+  assert.equal(workItemExecutionTimeout({ policy: { model: "test", allowedTools: [], maxRunTimeSeconds: 17, cleanupGraceSeconds: 13 } }), 30_000);
+  assert.equal(workItemExecutionTimeout({ policy: { model: "test", allowedTools: [], maxRunTimeSeconds: 17 } }), 317_000);
 });
 
 test("runs admitted work items concurrently up to the configured capacity", async () => {

@@ -9,6 +9,7 @@ test("uses safe defaults for worker policy", () => {
     agent: {
       model: "agent-default",
       maxRunTimeSeconds: 7200,
+      cleanupGraceSeconds: 300,
       bashTimeoutMs: 3600000,
       maxOutputTokens: 16384,
     },
@@ -27,6 +28,7 @@ test("preserves explicit policy overrides", () => {
   const config = configFromEnvironment({
     AGENT_MODEL: "agent-model",
     AGENT_MAX_RUN_TIME_SECONDS: "12",
+    WORK_ITEM_CLEANUP_GRACE_SECONDS: "13",
     AGENT_BASH_TIMEOUT_MS: "34",
     AGENT_MAX_OUTPUT_TOKENS: "56",
     DISPATCHER_MAX_YAK_DEPTH: "7",
@@ -38,7 +40,7 @@ test("preserves explicit policy overrides", () => {
   });
 
   assert.deepEqual(config, {
-    agent: { model: "agent-model", maxRunTimeSeconds: 12, bashTimeoutMs: 34, maxOutputTokens: 56 },
+    agent: { model: "agent-model", maxRunTimeSeconds: 12, cleanupGraceSeconds: 13, bashTimeoutMs: 34, maxOutputTokens: 56 },
     dispatcher: {
       maxYakDepth: 7,
       maxSplitChildren: 3,
@@ -57,6 +59,7 @@ test("defaults the planner model to the agent model", () => {
 test("rejects invalid policy values", () => {
   for (const key of [
     "AGENT_MAX_RUN_TIME_SECONDS",
+    "WORK_ITEM_CLEANUP_GRACE_SECONDS",
     "AGENT_BASH_TIMEOUT_MS",
     "AGENT_MAX_OUTPUT_TOKENS",
     "DISPATCHER_MAX_YAK_DEPTH",

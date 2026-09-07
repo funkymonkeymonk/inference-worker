@@ -7,7 +7,8 @@ import {
   sleep,
   workflowInfo,
 } from "@temporalio/workflow";
-import type { DispatchCandidate, DispatcherInput, DispatcherState } from "../types.js";
+import { DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS } from "../types.js";
+import type { DispatchCandidate, DispatcherInput, DispatcherState, WorkItemInput } from "../types.js";
 import { WorkItemWorkflow } from "./work-item.js";
 
 interface DispatcherActivities {
@@ -26,6 +27,10 @@ export const dispatcherStateQuery = defineQuery<DispatcherState>("state");
 
 export function dispatchExclusions(state: DispatcherState): string[] {
   return [...state.activeTaskIds];
+}
+
+export function workItemExecutionTimeout(input: Pick<WorkItemInput, "policy">): number {
+  return (input.policy.maxRunTimeSeconds + (input.policy.cleanupGraceSeconds ?? DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS)) * 1000;
 }
 
 export function compactDispatcherState(state: DispatcherState): DispatcherState {
@@ -55,6 +60,7 @@ export async function WorkDispatcherWorkflow(input: DispatcherInput): Promise<Di
           await executeChild(WorkItemWorkflow, {
             args: [candidate.workflowInput],
             workflowId: `work-item-${candidate.id}`,
+            workflowExecutionTimeout: workItemExecutionTimeout(candidate.workflowInput),
             retry: { maximumAttempts: 1 },
           });
           await markTaskDone(candidate.id);

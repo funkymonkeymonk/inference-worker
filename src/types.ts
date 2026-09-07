@@ -44,10 +44,13 @@ export interface PiTaskResult {
 
 export type AgentToolName = "read" | "write" | "edit" | "bash" | "listToolFiles";
 
+export const DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS = 300;
+
 export interface AgentPolicy {
   model: string;
   allowedTools: AgentToolName[];
   maxRunTimeSeconds: number;
+  cleanupGraceSeconds?: number;
 }
 
 export interface ExecuteAgentInput {

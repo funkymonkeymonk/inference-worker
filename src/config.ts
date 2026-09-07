@@ -1,9 +1,12 @@
+import { DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS } from "./types.js";
+
 const DEFAULT_AGENT_MODEL = "omlx/qwen3.8-27b";
 
 export interface WorkerConfig {
   agent: {
     model: string;
     maxRunTimeSeconds: number;
+    cleanupGraceSeconds: number;
     bashTimeoutMs: number;
     maxOutputTokens: number;
   };
@@ -46,6 +49,7 @@ export function configFromEnvironment(environment: NodeJS.ProcessEnv = process.e
     agent: {
       model: agentModel,
       maxRunTimeSeconds: positiveInteger(environment, "AGENT_MAX_RUN_TIME_SECONDS", 7200),
+      cleanupGraceSeconds: positiveInteger(environment, "WORK_ITEM_CLEANUP_GRACE_SECONDS", DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS),
       bashTimeoutMs: positiveInteger(environment, "AGENT_BASH_TIMEOUT_MS", 3600000),
       maxOutputTokens: positiveInteger(environment, "AGENT_MAX_OUTPUT_TOKENS", 16384),
     },

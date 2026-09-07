@@ -8,7 +8,7 @@ test("backend-neutral task values survive JSON serialization", () => {
     title: "Define contracts",
     context: "Keep orchestration backend-neutral.",
     repositoryRoot: "/workspace/project",
-    policy: { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 60 },
+    policy: { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 60, cleanupGraceSeconds: 300 },
   };
   const candidate: DispatchCandidate = {
     id: input.taskId,
