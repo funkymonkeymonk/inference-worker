@@ -49,6 +49,7 @@ in {
 
   processes.worker.exec = ''
     temporal_address="''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}"
+    export INFERENCE_ENDPOINT="''${INFERENCE_ENDPOINT:-http://127.0.0.1:8081/v1}"
     until temporal operator cluster health --address "$temporal_address" >/dev/null 2>&1; do sleep 1; done
     TEMPORAL_ADDRESS="$temporal_address" npm run build && \
     TEMPORAL_ADDRESS="$temporal_address" npm start
@@ -89,10 +90,11 @@ in {
       description = "Start one worker and dispatch one eligible yak";
       exec = ''
         temporal_address="''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}" &&
+        inference_endpoint="''${INFERENCE_ENDPOINT:-http://127.0.0.1:8081/v1}" &&
         temporal operator cluster health --address "$temporal_address" &&
         npm run build && {
           task_queue="manual-dispatch-$$"
-          TEMPORAL_ADDRESS="$temporal_address" DISPATCHER_ENABLED=false TEMPORAL_TASK_QUEUE="$task_queue" WORKER_ACTIVITY_SLOTS=1 npm start &
+          TEMPORAL_ADDRESS="$temporal_address" INFERENCE_ENDPOINT="$inference_endpoint" DISPATCHER_ENABLED=false TEMPORAL_TASK_QUEUE="$task_queue" WORKER_ACTIVITY_SLOTS=1 npm start &
           worker_pid=$!
           trap 'kill "$worker_pid" 2>/dev/null || true; wait "$worker_pid" 2>/dev/null || true' EXIT INT TERM
           sleep 1
@@ -105,6 +107,7 @@ in {
       description = "Start the Temporal worker";
       exec = ''
         temporal_address="''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}"
+        export INFERENCE_ENDPOINT="''${INFERENCE_ENDPOINT:-http://127.0.0.1:8081/v1}"
         until temporal operator cluster health --address "$temporal_address" >/dev/null 2>&1; do sleep 1; done
         TEMPORAL_ADDRESS="$temporal_address" npm start
       '';
@@ -114,6 +117,7 @@ in {
       description = "Start the Temporal worker from TypeScript source";
       exec = ''
         temporal_address="''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}"
+        export INFERENCE_ENDPOINT="''${INFERENCE_ENDPOINT:-http://127.0.0.1:8081/v1}"
         until temporal operator cluster health --address "$temporal_address" >/dev/null 2>&1; do sleep 1; done
         TEMPORAL_ADDRESS="$temporal_address" npm run dev
       '';
