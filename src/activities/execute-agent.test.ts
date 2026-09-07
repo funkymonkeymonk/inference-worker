@@ -172,17 +172,22 @@ test("returns when the stream sends DONE without closing the response body", asy
   await run;
 });
 
-test("rejects a model response truncated by the token limit", async () => {
+test("continues a model response truncated by the token limit", async () => {
   const workspacePath = await mkdtemp(path.join(os.tmpdir(), "agent-test-"));
-  const fetchImpl: AgentFetch = async () => streamResponse([
-    JSON.stringify({ choices: [{ finish_reason: "length", delta: { content: "partial" } }] }),
-    "[DONE]",
-  ]);
-  await assert.rejects(
-    () => runAgent(input(workspacePath, { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 10 }), {
-      fetchImpl,
-      endpoint: "http://test.invalid/v1",
-    }),
-    /incomplete.*length/i,
-  );
+  const responses = [
+    streamResponse([
+      JSON.stringify({ choices: [{ finish_reason: "length", delta: { content: "partial" } }] }),
+      "[DONE]",
+    ]),
+    streamResponse([
+      JSON.stringify({ choices: [{ finish_reason: "stop", delta: { content: " complete" } }] }),
+      "[DONE]",
+    ]),
+  ];
+  const result = await runAgent(input(workspacePath, { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 10 }), {
+    fetchImpl: async () => responses.shift()!,
+    endpoint: "http://test.invalid/v1",
+  });
+  assert.equal(result.completed, true);
+  assert.equal(result.text, "partial complete");
 });

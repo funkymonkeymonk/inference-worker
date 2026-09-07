@@ -279,6 +279,11 @@ export async function runAgent(input: ExecuteAgentInput, options: AgentRunOption
       const responseData = await readAgentResponse(response, options.heartbeat);
       text += responseData.text ?? "";
       if (responseData.finishReason === "stop") return { completed: true, text, toolCalls };
+      if (responseData.finishReason === "length" && !responseData.toolCalls.length) {
+        messages.push({ role: "assistant", content: responseData.text });
+        messages.push({ role: "user", content: "Continue from where you stopped. Do not repeat completed work; continue the task." });
+        continue;
+      }
       if (responseData.finishReason === "length") throw new Error("agent produced incomplete output: finish reason length");
       if (responseData.finishReason !== "tool_calls") throw new Error(`agent produced incomplete output: finish reason ${responseData.finishReason ?? "unknown"}`);
       const calls = responseData.toolCalls ?? [];
