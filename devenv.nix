@@ -25,6 +25,20 @@
     '';
   };
 
+  workerPolicyEnvironment = ''
+    export AGENT_MODEL="''${AGENT_MODEL-omlx/qwen3.8-27b}"
+    export AGENT_MAX_RUN_TIME_SECONDS="''${AGENT_MAX_RUN_TIME_SECONDS-7200}"
+    export AGENT_BASH_TIMEOUT_MS="''${AGENT_BASH_TIMEOUT_MS-3600000}"
+    export AGENT_MAX_OUTPUT_TOKENS="''${AGENT_MAX_OUTPUT_TOKENS-16384}"
+    export WORK_ITEM_CLEANUP_GRACE_SECONDS="''${WORK_ITEM_CLEANUP_GRACE_SECONDS-300}"
+    export DISPATCHER_MAX_YAK_DEPTH="''${DISPATCHER_MAX_YAK_DEPTH-10}"
+    export DISPATCHER_MAX_SPLIT_CHILDREN="''${DISPATCHER_MAX_SPLIT_CHILDREN-5}"
+    export DISPATCHER_SPLIT_ENABLED="''${DISPATCHER_SPLIT_ENABLED-true}"
+    export DISPATCHER_PLANNER_MODEL="''${DISPATCHER_PLANNER_MODEL-''${AGENT_MODEL}}"
+    export DISPATCHER_PLANNER_MAX_RUN_TIME_SECONDS="''${DISPATCHER_PLANNER_MAX_RUN_TIME_SECONDS-600}"
+    export DISPATCHER_PLANNER_MAX_OUTPUT_TOKENS="''${DISPATCHER_PLANNER_MAX_OUTPUT_TOKENS-4096}"
+  '';
+
 in {
   packages = [
     pkgs.nodejs
@@ -48,6 +62,7 @@ in {
   };
 
   processes.worker.exec = ''
+    ${workerPolicyEnvironment}
     temporal_address="''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}"
     export INFERENCE_ENDPOINT="''${INFERENCE_ENDPOINT:-http://127.0.0.1:8081/v1}"
     until temporal operator cluster health --address "$temporal_address" >/dev/null 2>&1; do sleep 1; done
@@ -69,6 +84,7 @@ in {
     "integration:test" = {
       description = "Build and run the Temporal WorkItem integration test (start devenv up -d first, or set INTEGRATION_TEMPORAL_ADDRESS)";
       exec = ''
+        ${workerPolicyEnvironment}
         temporal_address="''${INTEGRATION_TEMPORAL_ADDRESS:-''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}}" && \
         until temporal operator cluster health --address "$temporal_address" >/dev/null 2>&1; do sleep 1; done && \
         npm run build && \
@@ -79,6 +95,7 @@ in {
     "integration:worker-shaves-yak" = {
       description = "Start the worker and verify it dispatches and completes a temporary yx yak";
       exec = ''
+        ${workerPolicyEnvironment}
         temporal_address="''${INTEGRATION_TEMPORAL_ADDRESS:-''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}}" && \
         until temporal operator cluster health --address "$temporal_address" >/dev/null 2>&1; do sleep 1; done && \
         npm run build && \
@@ -89,6 +106,7 @@ in {
     "dispatch:run-once" = {
       description = "Start one worker and dispatch one eligible yak";
       exec = ''
+        ${workerPolicyEnvironment}
         temporal_address="''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}" &&
         inference_endpoint="''${INFERENCE_ENDPOINT:-http://127.0.0.1:8081/v1}" &&
         temporal operator cluster health --address "$temporal_address" &&
@@ -106,6 +124,7 @@ in {
     "worker:start" = {
       description = "Start the Temporal worker";
       exec = ''
+        ${workerPolicyEnvironment}
         temporal_address="''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}"
         export INFERENCE_ENDPOINT="''${INFERENCE_ENDPOINT:-http://127.0.0.1:8081/v1}"
         until temporal operator cluster health --address "$temporal_address" >/dev/null 2>&1; do sleep 1; done
@@ -116,6 +135,7 @@ in {
     "worker:start:dev" = {
       description = "Start the Temporal worker from TypeScript source";
       exec = ''
+        ${workerPolicyEnvironment}
         temporal_address="''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}"
         export INFERENCE_ENDPOINT="''${INFERENCE_ENDPOINT:-http://127.0.0.1:8081/v1}"
         until temporal operator cluster health --address "$temporal_address" >/dev/null 2>&1; do sleep 1; done

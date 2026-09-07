@@ -5,7 +5,7 @@ import { WorkDispatcherWorkflow } from "./workflows/dispatcher.js";
 import { temporalAddressFromEnvironment } from "./temporal-address.js";
 import { dispatcherWorkflowId } from "./workflow-id.js";
 import { shutdownWorker } from "./worker-shutdown.js";
-import { configFromEnvironment, dispatcherSplitPolicyFromConfig } from "./config.js";
+import { configFromEnvironment, dispatcherSplitPolicyFromConfig, formatWorkerPolicyDiagnostics } from "./config.js";
 
 const address = temporalAddressFromEnvironment();
 const namespace = process.env.TEMPORAL_NAMESPACE ?? "inference";
@@ -14,6 +14,7 @@ const repositoryRoot = process.env.REPOSITORY_ROOT ?? process.cwd();
 const taskBackend = process.env.TASK_BACKEND ?? "yx";
 if (taskBackend !== "yx") throw new Error(`unsupported task backend: ${taskBackend}`);
 const config = configFromEnvironment();
+console.info(formatWorkerPolicyDiagnostics(config));
 
 const connection = await NativeConnection.connect({ address });
 const worker = await Worker.create({

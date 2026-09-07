@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { configFromEnvironment, dispatcherSplitPolicyFromConfig } from "./config.js";
+import { configFromEnvironment, dispatcherSplitPolicyFromConfig, formatWorkerPolicyDiagnostics } from "./config.js";
 
 test("uses safe defaults for worker policy", () => {
-  const config = configFromEnvironment({ AGENT_MODEL: "agent-default" });
+  const config = configFromEnvironment({});
 
   assert.deepEqual(config, {
     agent: {
-      model: "agent-default",
+      model: "omlx/qwen3.8-27b",
       maxRunTimeSeconds: 7200,
       cleanupGraceSeconds: 300,
       bashTimeoutMs: 3600000,
@@ -17,7 +17,7 @@ test("uses safe defaults for worker policy", () => {
       maxYakDepth: 10,
       maxSplitChildren: 5,
       splitEnabled: true,
-      plannerModel: "agent-default",
+      plannerModel: "omlx/qwen3.8-27b",
       plannerMaxRunTimeSeconds: 600,
       plannerMaxOutputTokens: 4096,
     },
@@ -64,6 +64,28 @@ test("builds one serializable dispatcher split policy from worker config", () =>
     maxChildren: 5,
     planner: { model: "planner", maxRunTimeSeconds: 600, maxOutputTokens: 4096 },
   });
+});
+
+test("formats all effective policy values deterministically without endpoint credentials", () => {
+  const config = configFromEnvironment({
+    AGENT_MODEL: "agent-model",
+    AGENT_MAX_RUN_TIME_SECONDS: "12",
+    WORK_ITEM_CLEANUP_GRACE_SECONDS: "13",
+    AGENT_BASH_TIMEOUT_MS: "34",
+    AGENT_MAX_OUTPUT_TOKENS: "56",
+    DISPATCHER_MAX_YAK_DEPTH: "7",
+    DISPATCHER_MAX_SPLIT_CHILDREN: "3",
+    DISPATCHER_SPLIT_ENABLED: "false",
+    DISPATCHER_PLANNER_MODEL: "planner-model",
+    DISPATCHER_PLANNER_MAX_RUN_TIME_SECONDS: "78",
+    DISPATCHER_PLANNER_MAX_OUTPUT_TOKENS: "90",
+  });
+
+  assert.equal(
+    formatWorkerPolicyDiagnostics(config),
+    'worker policy: {"agent":{"model":"agent-model","maxRunTimeSeconds":12,"cleanupGraceSeconds":13,"bashTimeoutMs":34,"maxOutputTokens":56},"dispatcher":{"maxYakDepth":7,"maxSplitChildren":3,"splitEnabled":false,"plannerModel":"planner-model","plannerMaxRunTimeSeconds":78,"plannerMaxOutputTokens":90}}',
+  );
+  assert.doesNotMatch(formatWorkerPolicyDiagnostics(config), /INFERENCE_ENDPOINT|apiKey|secret/i);
 });
 
 test("rejects invalid policy values", () => {

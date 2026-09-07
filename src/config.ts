@@ -76,3 +76,7 @@ export function dispatcherSplitPolicyFromConfig(config: WorkerConfig): Dispatche
     },
   };
 }
+
+export function formatWorkerPolicyDiagnostics(config: WorkerConfig): string {
+  return `worker policy: ${JSON.stringify(config)}`;
+}
