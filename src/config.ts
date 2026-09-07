@@ -3,6 +3,10 @@ import { DEFAULT_WORK_ITEM_CLEANUP_GRACE_SECONDS, type DispatcherSplitPolicy } f
 const DEFAULT_AGENT_MODEL = "omlx/qwen3.8-27b";
 
 export interface WorkerConfig {
+  ui: {
+    host: string;
+    port: number;
+  };
   agent: {
     model: string;
     maxRunTimeSeconds: number;
@@ -46,6 +50,10 @@ function modelValue(environment: NodeJS.ProcessEnv, key: string, fallback: strin
 export function configFromEnvironment(environment: NodeJS.ProcessEnv = process.env): WorkerConfig {
   const agentModel = modelValue(environment, "AGENT_MODEL", DEFAULT_AGENT_MODEL);
   return {
+    ui: {
+      host: modelValue(environment, "UI_HOST", "127.0.0.1"),
+      port: positiveInteger(environment, "UI_PORT", 8787),
+    },
     agent: {
       model: agentModel,
       maxRunTimeSeconds: positiveInteger(environment, "AGENT_MAX_RUN_TIME_SECONDS", 7200),

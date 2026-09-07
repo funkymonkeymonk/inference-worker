@@ -6,6 +6,7 @@ test("uses safe defaults for worker policy", () => {
   const config = configFromEnvironment({});
 
   assert.deepEqual(config, {
+    ui: { host: "127.0.0.1", port: 8787 },
     agent: {
       model: "omlx/qwen3.8-27b",
       maxRunTimeSeconds: 7200,
@@ -27,6 +28,8 @@ test("uses safe defaults for worker policy", () => {
 test("preserves explicit policy overrides", () => {
   const config = configFromEnvironment({
     AGENT_MODEL: "agent-model",
+    UI_HOST: "localhost",
+    UI_PORT: "9999",
     AGENT_MAX_RUN_TIME_SECONDS: "12",
     WORK_ITEM_CLEANUP_GRACE_SECONDS: "13",
     AGENT_BASH_TIMEOUT_MS: "34",
@@ -40,6 +43,7 @@ test("preserves explicit policy overrides", () => {
   });
 
   assert.deepEqual(config, {
+    ui: { host: "localhost", port: 9999 },
     agent: { model: "agent-model", maxRunTimeSeconds: 12, cleanupGraceSeconds: 13, bashTimeoutMs: 34, maxOutputTokens: 56 },
     dispatcher: {
       maxYakDepth: 7,
@@ -83,13 +87,14 @@ test("formats all effective policy values deterministically without endpoint cre
 
   assert.equal(
     formatWorkerPolicyDiagnostics(config),
-    'worker policy: {"agent":{"model":"agent-model","maxRunTimeSeconds":12,"cleanupGraceSeconds":13,"bashTimeoutMs":34,"maxOutputTokens":56},"dispatcher":{"maxYakDepth":7,"maxSplitChildren":3,"splitEnabled":false,"plannerModel":"planner-model","plannerMaxRunTimeSeconds":78,"plannerMaxOutputTokens":90}}',
+    'worker policy: {"ui":{"host":"127.0.0.1","port":8787},"agent":{"model":"agent-model","maxRunTimeSeconds":12,"cleanupGraceSeconds":13,"bashTimeoutMs":34,"maxOutputTokens":56},"dispatcher":{"maxYakDepth":7,"maxSplitChildren":3,"splitEnabled":false,"plannerModel":"planner-model","plannerMaxRunTimeSeconds":78,"plannerMaxOutputTokens":90}}',
   );
   assert.doesNotMatch(formatWorkerPolicyDiagnostics(config), /INFERENCE_ENDPOINT|apiKey|secret/i);
 });
 
 test("rejects invalid policy values", () => {
   for (const key of [
+    "UI_PORT",
     "AGENT_MAX_RUN_TIME_SECONDS",
     "WORK_ITEM_CLEANUP_GRACE_SECONDS",
     "AGENT_BASH_TIMEOUT_MS",
