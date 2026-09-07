@@ -51,7 +51,42 @@ export function historyEvents(value: unknown): UiHistoryEvent[] {
   if (!value || typeof value !== "object" || !Array.isArray((value as { events?: unknown }).events)) return [];
   return (value as { events: Array<Record<string, unknown>> }).events.map((event, index) => ({
     eventId: String(event.eventId ?? index + 1),
-    type: String(event.eventType ?? event.type ?? "Unknown"),
-    ...(event.eventTime ? { time: String(event.eventTime) } : {}),
+    type: eventTypeName(event.eventType ?? event.type),
+    ...(event.eventTime ? { time: eventTimeValue(event.eventTime) } : {}),
   }));
+}
+
+const EVENT_TYPE_NAMES: Record<number, string> = {
+  1: "WorkflowExecutionStarted",
+  2: "WorkflowExecutionCompleted",
+  3: "WorkflowExecutionFailed",
+  4: "WorkflowExecutionTimedOut",
+  5: "WorkflowTaskScheduled",
+  6: "WorkflowTaskStarted",
+  7: "WorkflowTaskCompleted",
+  8: "WorkflowTaskTimedOut",
+  9: "WorkflowTaskFailed",
+  10: "ActivityTaskScheduled",
+  11: "ActivityTaskStarted",
+  12: "ActivityTaskCompleted",
+  13: "ActivityTaskFailed",
+  14: "ActivityTaskTimedOut",
+  15: "ActivityTaskCancelRequested",
+  16: "ActivityTaskCanceled",
+};
+
+function eventTypeName(value: unknown): string {
+  if (typeof value === "number") return EVENT_TYPE_NAMES[value] ?? `EventType(${value})`;
+  return String(value ?? "Unknown");
+}
+
+function eventTimeValue(value: unknown): string {
+  if (!value || typeof value !== "object" || !("seconds" in value)) return String(value);
+  const timestamp = value as { seconds: unknown; nanos?: unknown };
+  const secondsValue = timestamp.seconds;
+  const seconds = secondsValue && typeof secondsValue === "object" && "toNumber" in secondsValue && typeof secondsValue.toNumber === "function"
+    ? secondsValue.toNumber()
+    : Number(secondsValue);
+  const nanos = Number(timestamp.nanos ?? 0);
+  return new Date(seconds * 1000 + nanos / 1_000_000).toISOString();
 }

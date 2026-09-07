@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildOverview, buildWorkItemDetail } from "./view-model.js";
+import { buildOverview, buildWorkItemDetail, historyEvents } from "./view-model.js";
 import type { TemporalExecution, YxTask } from "./types.js";
 
 const execution: TemporalExecution = {
@@ -47,4 +47,10 @@ test("builds a detail record with task context and execution history", () => {
   assert.equal(detail.taskId, "yak-1");
   assert.equal(detail.context, "# Goal\nBuild it");
   assert.deepEqual(detail.history, [{ eventId: "1", type: "WorkflowExecutionStarted" }]);
+});
+
+test("renders Temporal numeric event types and protobuf timestamps as readable values", () => {
+  assert.deepEqual(historyEvents({ events: [{ eventId: { toString: () => "7" }, eventType: 1, eventTime: { seconds: { toNumber: () => 1788820073 }, nanos: 0 } }] }), [
+    { eventId: "7", type: "WorkflowExecutionStarted", time: "2026-09-07T22:27:53.000Z" },
+  ]);
 });
