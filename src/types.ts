@@ -79,6 +79,22 @@ export interface SplitPlan {
   proposals: SplitProposal[];
 }
 
+export interface PlannerPolicy {
+  model: string;
+  maxRunTimeSeconds: number;
+  maxOutputTokens: number;
+}
+
+export interface PlanYakSplitInput {
+  title: string;
+  context: string;
+  failureReason: string;
+  currentRootDepth: number;
+  maxRootDepth: number;
+  maxChildren: number;
+  policy: PlannerPolicy;
+}
+
 export type WorkItemPhase = "queued" | "claimed" | "agent" | "review" | "merged" | "completed" | "released" | "failed";
 
 export interface WorkItemInput {
