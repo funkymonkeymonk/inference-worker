@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { DispatchCandidate, WorkItemInput, WorkItemState } from "./types.js";
+import type { DispatchCandidate, SplitPlan, SplitProposal, WorkItemInput, WorkItemState } from "./types.js";
 
 test("backend-neutral task values survive JSON serialization", () => {
   const input: WorkItemInput = {
@@ -26,4 +26,20 @@ test("backend-neutral task values survive JSON serialization", () => {
 
   assert.deepEqual(JSON.parse(JSON.stringify(candidate)), candidate);
   assert.deepEqual(JSON.parse(JSON.stringify(state)), state);
+});
+
+test("split proposals and plans survive JSON serialization", () => {
+  const proposal: SplitProposal = {
+    name: "Add configuration contracts",
+    goal: "Define validated worker policy.",
+    scope: ["src/config.ts", "src/types.ts"],
+    acceptanceCriteria: ["Defaults are documented in tests."],
+    tests: ["Run focused configuration tests."],
+    dependencies: [],
+    nonGoals: ["Do not wire activities yet."],
+  };
+  const plan: SplitPlan = { proposals: [proposal] };
+
+  assert.deepEqual(JSON.parse(JSON.stringify(proposal)), proposal);
+  assert.deepEqual(JSON.parse(JSON.stringify(plan)), plan);
 });

@@ -43,6 +43,8 @@ test("runs admitted work items concurrently up to the configured capacity", asyn
     taskQueue: "dispatcher-test",
     workflowsPath: new URL("./index.ts", import.meta.url).pathname,
     activities: {
+      createWorkspace: async () => ({ workspacePath: "/tmp/work-item", workspaceName: "run", workspaceMode: "jj" }),
+      cleanupWorkspace: async () => undefined,
       listDispatchCandidates: async () => candidates,
       claimTask: async () => undefined,
       markTaskDone: async () => undefined,
@@ -87,6 +89,8 @@ test("records failed implementations and continues the run-once dispatch", async
     taskQueue: "dispatcher-failure-test",
     workflowsPath: new URL("./index.ts", import.meta.url).pathname,
     activities: {
+      createWorkspace: async () => ({ workspacePath: "/tmp/work-item", workspaceName: "run", workspaceMode: "jj" }),
+      cleanupWorkspace: async () => undefined,
       listDispatchCandidates: async () => [{
         id: "failed-task",
         title: input.title,

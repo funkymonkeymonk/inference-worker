@@ -62,6 +62,20 @@ export interface ExecuteAgentResult {
   toolCalls: number;
 }
 
+export interface SplitProposal {
+  name: string;
+  goal: string;
+  scope: string[];
+  acceptanceCriteria: string[];
+  tests: string[];
+  dependencies: string[];
+  nonGoals: string[];
+}
+
+export interface SplitPlan {
+  proposals: SplitProposal[];
+}
+
 export type WorkItemPhase = "queued" | "claimed" | "agent" | "review" | "merged" | "completed" | "released" | "failed";
 
 export interface WorkItemInput {
