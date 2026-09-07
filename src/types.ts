@@ -51,6 +51,8 @@ export interface AgentPolicy {
   allowedTools: AgentToolName[];
   maxRunTimeSeconds: number;
   cleanupGraceSeconds?: number;
+  bashTimeoutMs?: number;
+  maxOutputTokens?: number;
 }
 
 export interface ExecuteAgentInput {

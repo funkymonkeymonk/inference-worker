@@ -270,7 +270,7 @@ export async function runAgent(input: ExecuteAgentInput, options: AgentRunOption
           model: input.policy.model,
           messages,
           tools: input.policy.allowedTools.map((name) => TOOL_SCHEMAS[name]),
-          max_tokens: DEFAULT_MAX_OUTPUT_TOKENS,
+          max_tokens: input.policy.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
           stream: true,
           stream_options: { include_usage: true },
         }),
@@ -295,7 +295,10 @@ export async function runAgent(input: ExecuteAgentInput, options: AgentRunOption
       });
       for (const call of calls) {
         const args = JSON.parse(call.arguments) as Record<string, unknown>;
-        const result = await runAgentTool(call.name, args, input.workspacePath, input.policy.allowedTools, { signal: controller.signal });
+        const result = await runAgentTool(call.name, args, input.workspacePath, input.policy.allowedTools, {
+          signal: controller.signal,
+          timeoutMs: input.policy.bashTimeoutMs,
+        });
         messages.push({ role: "tool", tool_call_id: call.id, content: result });
         toolCalls += 1;
         options.heartbeat?.({ tool: call.name, toolCalls });

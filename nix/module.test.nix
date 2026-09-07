@@ -3,6 +3,7 @@ let
   module = {config, lib, ...}:
     import ./module.nix {
       inherit config lib;
+      inherit pkgs;
       package = pkgs.hello;
     };
 
@@ -72,6 +73,7 @@ in {
     (assert (environment overrides).DISPATCHER_PLANNER_MODEL == "planner-model"; true)
     (assert (environment overrides).DISPATCHER_PLANNER_MAX_RUN_TIME_SECONDS == "90"; true)
     (assert (environment overrides).DISPATCHER_PLANNER_MAX_OUTPUT_TOKENS == "123"; true)
+    (assert (environment defaults).PATH == "${pkgs.lib.makeBinPath [pkgs.yx pkgs.git pkgs.jujutsu]}:/run/current-system/sw/bin:/usr/bin:/bin"; true)
   ];
   defaults = environment defaults;
   overrides = environment overrides;

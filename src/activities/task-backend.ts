@@ -13,6 +13,8 @@ function configuredBackend(): TaskBackend {
       allowedTools: ["read", "write", "edit", "bash", "listToolFiles"] as AgentToolName[],
       maxRunTimeSeconds: config.agent.maxRunTimeSeconds,
       cleanupGraceSeconds: config.agent.cleanupGraceSeconds,
+      bashTimeoutMs: config.agent.bashTimeoutMs,
+      maxOutputTokens: config.agent.maxOutputTokens,
     },
     maxYakDepth: config.dispatcher.maxYakDepth,
     maxSplitChildren: config.dispatcher.maxSplitChildren,

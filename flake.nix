@@ -24,9 +24,11 @@
           mkdir -p "$out/lib/inference-worker" "$out/bin"
           cp -r dist node_modules package.json "$out/lib/inference-worker/"
           makeWrapper "${pkgs.nodejs}/bin/node" "$out/bin/inference-worker" \
-            --add-flags "$out/lib/inference-worker/dist/worker.js"
+            --add-flags "$out/lib/inference-worker/dist/worker.js" \
+            --prefix PATH : "${pkgs.lib.makeBinPath [pkgs.yx pkgs.git pkgs.jujutsu]}"
           makeWrapper "${pkgs.nodejs}/bin/node" "$out/bin/inference-worker-client" \
-            --add-flags "$out/lib/inference-worker/dist/client.js"
+            --add-flags "$out/lib/inference-worker/dist/client.js" \
+            --prefix PATH : "${pkgs.lib.makeBinPath [pkgs.yx pkgs.git pkgs.jujutsu]}"
           runHook postInstall
         '';
       };

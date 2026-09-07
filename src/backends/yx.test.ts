@@ -132,7 +132,7 @@ test("rejects a split that exceeds configured depth or child count before mutati
   assert.deepEqual(calls, [["list", "--format", "json"]]);
 });
 
-test("records failure history, blocks the parent, and creates tagged child yaks", async () => {
+test("blocks the parent and creates tagged child yaks without duplicating failure history", async () => {
   const calls: Array<{ args: string[]; input?: string }> = [];
   let addCount = 0;
   const taskBackend = new YxTaskBackend({
@@ -152,7 +152,6 @@ test("records failure history, blocks the parent, and creates tagged child yaks"
   assert.deepEqual(calls.map(({ args }) => args), [
     ["list", "--format", "json"],
     ["context", "failed-child", "--show"],
-    ["context", "failed-child"],
     ["tag", "add", "failed-child", "@implementation-failed"],
     ["state", "failed-child", "todo"],
     ["add", "Add first child", "--under", "failed-child", "--id", "failed-child-split-1", "--format", "ids"],
@@ -164,7 +163,6 @@ test("records failure history, blocks the parent, and creates tagged child yaks"
     ["context", "failed-child", "--show"],
     ["context", "failed-child"],
   ]);
-  assert.match(calls[2].input ?? "", /Implementation attempt/);
   assert.match(calls.at(-1)?.input ?? "", /Automatic split/);
   assert.match(calls.at(-1)?.input ?? "", /failed-child-split-1/);
 });

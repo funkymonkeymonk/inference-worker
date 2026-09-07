@@ -170,8 +170,6 @@ export class YxTaskBackend implements TaskBackend {
     const context = await this.getContext(input.taskId);
     if (context.includes(SPLIT_MARKER)) return;
 
-    const attempt = `${context}\n\n## Implementation attempt\n\n- Status: failed\n- Reason: ${input.failureReason}\n`;
-    await this.runner("yx", ["context", input.taskId], attempt);
     await this.runner("yx", ["tag", "add", input.taskId, "@implementation-failed"]);
     await this.runner("yx", ["state", input.taskId, "todo"]);
 

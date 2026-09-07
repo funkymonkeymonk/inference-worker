@@ -47,14 +47,19 @@ test("continues a streamed tool call with the tool result", async () => {
     return responses.shift()!;
   };
 
-  const result = await runAgent(input(workspacePath, { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 10 }), {
+  const result = await runAgent(input(workspacePath, {
+    model: "test-model",
+    allowedTools: ["read"],
+    maxRunTimeSeconds: 10,
+    maxOutputTokens: 321,
+  }), {
     fetchImpl,
     endpoint: "http://test.invalid/v1",
   });
 
   assert.equal(result.text, "The notes contain contract notes.");
   assert.equal(requests.length, 2);
-  assert.equal(requests[0].max_tokens, 16384);
+  assert.equal(requests[0].max_tokens, 321);
   assert.equal((requests[0].messages[0] as { role: string }).role, "system");
   assert.match((requests[0].messages[0] as { content: string }).content, /provided workspace/);
   assert.match((requests[0].messages[0] as { content: string }).content, /write or edit/);
@@ -93,6 +98,25 @@ test("bounds bash execution time", async () => {
   await assert.rejects(
     () => runAgentTool("bash", { command: "sleep 1" }, workspacePath, ["bash"], { timeoutMs: 25 }),
     /timed out|Command failed/i,
+  );
+});
+
+test("uses the configured bash timeout when executing an agent tool", async () => {
+  const workspacePath = await mkdtemp(path.join(os.tmpdir(), "agent-test-"));
+  const fetchImpl: AgentFetch = async () => streamResponse([
+    JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call-bash", type: "function", function: { name: "bash", arguments: '{"command":"sleep 1"}' } }] } }] }),
+    JSON.stringify({ choices: [{ finish_reason: "tool_calls", delta: {} }] }),
+    "[DONE]",
+  ]);
+
+  await assert.rejects(
+    () => runAgent(input(workspacePath, {
+      model: "test-model",
+      allowedTools: ["bash"],
+      maxRunTimeSeconds: 10,
+      bashTimeoutMs: 25,
+    }), { fetchImpl, endpoint: "http://test.invalid/v1" }),
+    /timed out after 25ms/,
   );
 });
 

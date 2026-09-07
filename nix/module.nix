@@ -1,4 +1,4 @@
-{config, lib, package, ...}: let
+{config, lib, package, pkgs, ...}: let
   cfg = config.services.inference-worker;
 in {
   options.services.inference-worker = {
@@ -170,7 +170,7 @@ in {
            DISPATCHER_PLANNER_MAX_RUN_TIME_SECONDS = toString cfg.dispatcher.plannerMaxRunTimeSeconds;
            DISPATCHER_PLANNER_MAX_OUTPUT_TOKENS = toString cfg.dispatcher.plannerMaxOutputTokens;
            HOME = cfg.home;
-          PATH = "/run/current-system/sw/bin:/usr/bin:/bin";
+            PATH = "${pkgs.lib.makeBinPath [pkgs.yx pkgs.git pkgs.jujutsu]}:/run/current-system/sw/bin:/usr/bin:/bin";
         };
       };
     };
