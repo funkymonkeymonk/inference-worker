@@ -50,7 +50,7 @@ in {
     enable = true;
     ip = "127.0.0.1";
     port = 7233;
-    namespaces = ["inference"];
+    namespaces = ["inference" "integration-inference"];
 
     state.ephemeral = false;
 

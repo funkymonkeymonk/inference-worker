@@ -13,7 +13,7 @@ import { temporalAddressFromEnvironment } from "../dist/temporal-address.js";
 const execFileAsync = promisify(execFile);
 const repositoryRoot = process.cwd();
 const temporalAddress = process.env.INTEGRATION_TEMPORAL_ADDRESS ?? temporalAddressFromEnvironment();
-const temporalNamespace = process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? process.env.TEMPORAL_NAMESPACE ?? "inference";
+const temporalNamespace = process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? "integration-inference";
 
 function sse(events: unknown[]): string {
   return `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")}data: [DONE]\n\n`;
@@ -76,7 +76,7 @@ test("devenv worker dispatches and completes a real yak", async () => {
       env: {
         ...process.env,
         TEMPORAL_ADDRESS: temporalAddress,
-        TEMPORAL_NAMESPACE: process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? process.env.TEMPORAL_NAMESPACE ?? "inference",
+        TEMPORAL_NAMESPACE: temporalNamespace,
         TEMPORAL_TASK_QUEUE: `integration-worker-${suffix}`,
         DISPATCHER_WORKFLOW_ID: dispatcherWorkflowId,
         REPOSITORY_ROOT: repositoryRoot,

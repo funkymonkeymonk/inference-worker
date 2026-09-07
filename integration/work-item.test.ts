@@ -11,7 +11,7 @@ import { WorkItemWorkflow } from "../dist/workflows/work-item.js";
 import { temporalAddressFromEnvironment } from "../dist/temporal-address.js";
 
 const temporalAddress = process.env.INTEGRATION_TEMPORAL_ADDRESS ?? temporalAddressFromEnvironment();
-const temporalNamespace = process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? process.env.TEMPORAL_NAMESPACE ?? "inference";
+const temporalNamespace = process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? "integration-inference";
 
 function sse(events: unknown[]): string {
   return `${events.map((event) => `data: ${typeof event === "string" ? event : JSON.stringify(event)}\n\n`).join("")}data: [DONE]\n\n`;
