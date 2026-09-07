@@ -12,6 +12,8 @@ import type {
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_BASH_TIMEOUT_MS = 30_000;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 const MAX_BASH_OUTPUT_BYTES = 1024 * 1024;
 const IGNORED_DIRECTORY_NAMES = new Set([".git", ".yaks", ".devenv", "node_modules", "__pycache__"]);
 const TOOL_SCHEMAS: Record<AgentToolName, object> = {
@@ -93,6 +95,7 @@ export interface AgentRunOptions {
   endpoint?: string;
   cancellationSignal?: AbortSignal;
   heartbeat?: (details: unknown) => void;
+  heartbeatIntervalMs?: number;
 }
 
 export interface ToolRunOptions {
@@ -213,7 +216,11 @@ async function readAgentResponse(response: Response, heartbeat?: (details: unkno
     buffer = lines.pop() ?? "";
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue;
-      const parsed = parseChunk(line.slice(6).trim());
+      const data = line.slice(6).trim();
+      if (data === "[DONE]") {
+        return { text, finishReason, toolCalls: [...calls.entries()].map(([index, call]) => ({ index, ...call })) };
+      }
+      const parsed = parseChunk(data);
       if (!parsed) continue;
       text += parsed.text ?? "";
       finishReason = parsed.finishReason ?? finishReason;
@@ -239,6 +246,9 @@ export async function runAgent(input: ExecuteAgentInput, options: AgentRunOption
   const timer = setTimeout(() => controller.abort(new Error("agent exceeded maximum run time")), input.policy.maxRunTimeSeconds * 1000);
   const onCancel = () => controller.abort(new Error("agent activity cancelled"));
   options.cancellationSignal?.addEventListener("abort", onCancel, { once: true });
+  const heartbeatTimer = options.heartbeat
+    ? setInterval(() => options.heartbeat?.({ phase: "waiting-for-inference" }), options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS)
+    : undefined;
   const messages: AgentMessage[] = [
     {
       role: "system",
@@ -260,6 +270,7 @@ export async function runAgent(input: ExecuteAgentInput, options: AgentRunOption
           model: input.policy.model,
           messages,
           tools: input.policy.allowedTools.map((name) => TOOL_SCHEMAS[name]),
+          max_tokens: DEFAULT_MAX_OUTPUT_TOKENS,
           stream: true,
           stream_options: { include_usage: true },
         }),
@@ -287,6 +298,7 @@ export async function runAgent(input: ExecuteAgentInput, options: AgentRunOption
     }
   } finally {
     clearTimeout(timer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
     options.cancellationSignal?.removeEventListener("abort", onCancel);
   }
 }

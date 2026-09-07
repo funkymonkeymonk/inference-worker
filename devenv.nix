@@ -145,6 +145,7 @@ in {
         temporal operator namespace list --address "''${TEMPORAL_ADDRESS:-127.0.0.1:''${TEMPORAL_PORT:-7233}}"
       '';
     };
+
   };
 
   enterShell = ''

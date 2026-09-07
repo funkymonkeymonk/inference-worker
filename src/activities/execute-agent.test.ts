@@ -28,7 +28,7 @@ function input(workspacePath: string, policy: AgentPolicy): ExecuteAgentInput {
 test("continues a streamed tool call with the tool result", async () => {
   const workspacePath = await mkdtemp(path.join(os.tmpdir(), "agent-test-"));
   await writeFile(path.join(workspacePath, "notes.txt"), "contract notes");
-  const requests: Array<{ messages: unknown[]; tools: unknown[] }> = [];
+  const requests: Array<{ messages: unknown[]; tools: unknown[]; max_tokens?: number }> = [];
   const responses = [
     streamResponse([
       JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name: "read", arguments: '{"path":"notes.txt"}' } }] } }] }),
@@ -54,6 +54,7 @@ test("continues a streamed tool call with the tool result", async () => {
 
   assert.equal(result.text, "The notes contain contract notes.");
   assert.equal(requests.length, 2);
+  assert.equal(requests[0].max_tokens, 8192);
   assert.equal((requests[0].messages[0] as { role: string }).role, "system");
   assert.match((requests[0].messages[0] as { content: string }).content, /provided workspace/);
   assert.match((requests[0].messages[0] as { content: string }).content, /write or edit/);
@@ -116,6 +117,59 @@ test("cancels an in-flight model request", async () => {
   });
   cancellation.abort(new Error("agent activity cancelled"));
   await assert.rejects(run, /agent activity cancelled/);
+});
+
+test("heartbeats while waiting for the first streamed model response", async () => {
+  const workspacePath = await mkdtemp(path.join(os.tmpdir(), "agent-test-"));
+  let responseResolved = false;
+  let earlyHeartbeats = 0;
+  const fetchImpl: AgentFetch = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    responseResolved = true;
+    return streamResponse([
+      JSON.stringify({ choices: [{ finish_reason: "stop", delta: { content: "done" } }] }),
+      "[DONE]",
+    ]);
+  };
+
+  const result = await runAgent(input(workspacePath, { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 10 }), {
+    fetchImpl,
+    endpoint: "http://test.invalid/v1",
+    heartbeat: () => { if (!responseResolved) earlyHeartbeats += 1; },
+    heartbeatIntervalMs: 5,
+  });
+
+  assert.equal(result.completed, true);
+  assert.ok(earlyHeartbeats > 0);
+});
+
+test("returns when the stream sends DONE without closing the response body", async () => {
+  const workspacePath = await mkdtemp(path.join(os.tmpdir(), "agent-test-"));
+  let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+  const encoder = new TextEncoder();
+  const fetchImpl: AgentFetch = async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ finish_reason: "stop", delta: { content: "done" } }] })}\n\ndata: [DONE]\n\n`));
+      },
+    });
+    return new Response(body, { headers: { "content-type": "text/event-stream" } });
+  };
+  const run = runAgent(input(workspacePath, { model: "test-model", allowedTools: ["read"], maxRunTimeSeconds: 10 }), {
+    fetchImpl,
+    endpoint: "http://test.invalid/v1",
+  });
+
+  try {
+    await Promise.race([
+      run,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("stream did not finish after DONE")), 100)),
+    ]);
+  } finally {
+    streamController?.close();
+  }
+  await run;
 });
 
 test("rejects a model response truncated by the token limit", async () => {
