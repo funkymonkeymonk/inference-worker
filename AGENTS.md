@@ -5,6 +5,8 @@
 Use [`docs/yak-template.md`](docs/yak-template.md) for every new yak. The
 template is required and keeps scope, acceptance criteria, tests, dependencies,
 and non-goals explicit.
+Use [`docs/yak-quality-criteria.md`](docs/yak-quality-criteria.md) when sizing,
+splitting, or reviewing implementation yaks.
 
 Create one root yak for each coherent body of work. The root is a review-only
 final check for documentation, specification completeness, code quality,
