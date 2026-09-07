@@ -11,7 +11,7 @@ import type {
 } from "../types.js";
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_BASH_TIMEOUT_MS = 30_000;
+const DEFAULT_BASH_TIMEOUT_MS = 60 * 60 * 1000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 16384;
 const MAX_BASH_OUTPUT_BYTES = 1024 * 1024;
