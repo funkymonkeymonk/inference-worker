@@ -41,12 +41,13 @@ interface YakRecord {
   yak: YxYak;
   root: YxYak;
   depth: number;
+  blocked: boolean;
 }
 
-function flatten(yaks: YxYak[], root?: YxYak, depth = 0): YakRecord[] {
+function flatten(yaks: YxYak[], root?: YxYak, depth = 0, blocked = false): YakRecord[] {
   return yaks.flatMap((yak) => [
-    { yak, root: root ?? yak, depth },
-    ...flatten(yak.children ?? [], root ?? yak, depth + 1),
+    { yak, root: root ?? yak, depth, blocked: blocked || hasTag(yak, "@implementation-failed") },
+    ...flatten(yak.children ?? [], root ?? yak, depth + 1, blocked || hasTag(yak, "@implementation-failed")),
   ]);
 }
 
@@ -88,7 +89,8 @@ export class YxTaskBackend implements TaskBackend {
     const parsed = JSON.parse(raw) as YxYak[];
     const excluded = new Set(input.excludeIds);
     const records: CandidateRecord[] = [];
-    for (const { yak, root, depth } of flatten(parsed)) {
+    for (const { yak, root, depth, blocked } of flatten(parsed)) {
+      if (blocked) continue;
       if (!hasTag(root, "@g2g")) continue;
       const priority = priorityFor(root);
       if (priority === undefined) {
@@ -131,6 +133,13 @@ export class YxTaskBackend implements TaskBackend {
   }
 
   async release(id: string, _reason: string): Promise<void> {
+    await this.runner("yx", ["state", id, "todo"]);
+  }
+
+  async recordFailure(id: string, reason: string): Promise<void> {
+    const context = await this.getContext(id);
+    await this.runner("yx", ["context", id], `${context}\n\n## Implementation attempt\n\n- Status: failed\n- Reason: ${reason}\n`);
+    await this.runner("yx", ["tag", "add", id, "@implementation-failed"]);
     await this.runner("yx", ["state", id, "todo"]);
   }
 

@@ -5,10 +5,10 @@ import { Worker } from "@temporalio/worker";
 import { compactDispatcherState, dispatchExclusions, WorkDispatcherWorkflow } from "./dispatcher.js";
 import type { DispatchCandidate, WorkItemInput } from "../types.js";
 
-test("excludes active and failed tasks from the next dispatch scan", () => {
+test("excludes active tasks while backend tags control failed-task blocking", () => {
   assert.deepEqual(
     dispatchExclusions({ activeTaskIds: ["active"], completedTaskIds: ["done"], failedTaskIds: ["failed"] }),
-    ["active", "failed"],
+    ["active"],
   );
 });
 
@@ -46,7 +46,7 @@ test("runs admitted work items concurrently up to the configured capacity", asyn
       listDispatchCandidates: async () => candidates,
       claimTask: async () => undefined,
       markTaskDone: async () => undefined,
-      releaseTask: async () => undefined,
+       recordTaskFailure: async () => undefined,
       executeAgent: async () => {
         running += 1;
         maximumRunning = Math.max(maximumRunning, running);
@@ -64,6 +64,51 @@ test("runs admitted work items concurrently up to the configured capacity", asyn
       workflowId: "dispatcher-concurrency-test",
     });
     assert.equal(maximumRunning, 2);
+  } finally {
+    worker.shutdown();
+    await run;
+    await environment.teardown();
+  }
+});
+
+test("records failed implementations and continues the run-once dispatch", async () => {
+  const environment = await TestWorkflowEnvironment.createLocal();
+  const failures: Array<{ id: string; reason: string }> = [];
+  const input: WorkItemInput = {
+    taskId: "task-template",
+    title: "test",
+    context: "test",
+    repositoryRoot: "/tmp",
+    policy: { model: "test", allowedTools: [], maxRunTimeSeconds: 1 },
+  };
+  const worker = await Worker.create({
+    connection: environment.nativeConnection,
+    namespace: environment.namespace,
+    taskQueue: "dispatcher-failure-test",
+    workflowsPath: new URL("./index.ts", import.meta.url).pathname,
+    activities: {
+      listDispatchCandidates: async () => [{
+        id: "failed-task",
+        title: input.title,
+        context: input.context,
+        kind: "implementation" as const,
+        workflowInput: { ...input, taskId: "failed-task" },
+      }],
+      claimTask: async () => undefined,
+      markTaskDone: async () => undefined,
+      recordTaskFailure: async (id: string, reason: string) => { failures.push({ id, reason }); },
+      executeAgent: async () => { throw new Error("agent failed"); },
+    },
+  });
+  const run = worker.run();
+  try {
+    const result = await environment.client.workflow.execute(WorkDispatcherWorkflow, {
+      args: [{ maxConcurrentImplementations: 1, runOnce: true }],
+      taskQueue: "dispatcher-failure-test",
+      workflowId: "dispatcher-failure-test",
+    });
+    assert.deepEqual(result.failedTaskIds, ["failed-task"]);
+    assert.deepEqual(failures, [{ id: "failed-task", reason: "agent failed" }]);
   } finally {
     worker.shutdown();
     await run;

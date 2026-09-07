@@ -26,6 +26,10 @@ export function releaseTask(id: string, reason: string): Promise<void> {
   return configuredBackend().release(id, reason);
 }
 
+export function recordTaskFailure(id: string, reason: string): Promise<void> {
+  return configuredBackend().recordFailure(id, reason);
+}
+
 export function markTaskDone(id: string): Promise<void> {
   return configuredBackend().markDone(id);
 }

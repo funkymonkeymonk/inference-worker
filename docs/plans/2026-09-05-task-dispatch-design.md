@@ -55,6 +55,7 @@ interface TaskBackend {
   }): Promise<DispatchCandidate[]>;
   claim(id: string): Promise<void>;
   release(id: string, reason: string): Promise<void>;
+  recordFailure(id: string, reason: string): Promise<void>;
   markDone(id: string): Promise<void>;
   getContext(id: string): Promise<string>;
   attachPullRequest(id: string, url: string): Promise<void>;
@@ -75,6 +76,9 @@ The `yx` adapter owns these rules:
   code quality, and tests. It becomes eligible only after every descendant is
   terminal.
 - Missing or malformed root priority tags exclude the entire tree.
+- An `@implementation-failed` tag excludes that yak and all descendants until
+  the blocker is fixed and the tag is removed; independent siblings remain
+  eligible.
 - Candidates are ordered by root priority descending, tree depth descending,
   review kind, creation time ascending, and stable yak ID ascending.
 
@@ -128,7 +132,9 @@ state and makes the task eligible for the review queue.
 
 Activities that mutate a workspace or task state use one attempt unless they
 are explicitly made idempotent. Network reads and safe backend operations may
-use bounded retries.
+use bounded retries. A failed implementation appends an attempt-history entry
+to the backend task context, adds `@implementation-failed`, and releases the
+task to `todo` without automatically rerunning it.
 
 ## Agent Execution
 
@@ -203,8 +209,9 @@ than silently falling back to `yx`.
 - Dispatcher failure: Temporal resumes the singleton dispatcher and reconciles
   active workflows before admitting more work.
 - Claim failure: the work-item workflow exits without affecting other tasks.
-- Agent failure: release the task, clean the workspace, and record failure;
-  do not automatically rerun the agent.
+- Agent failure: append the failure reason to implementation attempt history,
+  add `@implementation-failed`, release the task to `todo`, and clean the
+  workspace; do not automatically rerun the agent or its dependent yaks.
 - PR creation failure: release the task and clean the workspace.
 - PR closed without merge: release the task and finish the workflow.
 - Worker restart: Temporal resumes each workflow from its recorded history.

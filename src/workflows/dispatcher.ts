@@ -13,11 +13,11 @@ import { WorkItemWorkflow } from "./work-item.js";
 interface DispatcherActivities {
   listDispatchCandidates(input: { excludeIds: string[]; limit: number }): Promise<DispatchCandidate[]>;
   claimTask(id: string): Promise<void>;
-  releaseTask(id: string, reason: string): Promise<void>;
+  recordTaskFailure(id: string, reason: string): Promise<void>;
   markTaskDone(id: string): Promise<void>;
 }
 
-const { listDispatchCandidates, claimTask, releaseTask, markTaskDone } = proxyActivities<DispatcherActivities>({
+const { listDispatchCandidates, claimTask, recordTaskFailure, markTaskDone } = proxyActivities<DispatcherActivities>({
   startToCloseTimeout: "5 minutes",
   retry: { maximumAttempts: 1 },
 });
@@ -25,11 +25,18 @@ const { listDispatchCandidates, claimTask, releaseTask, markTaskDone } = proxyAc
 export const dispatcherStateQuery = defineQuery<DispatcherState>("state");
 
 export function dispatchExclusions(state: DispatcherState): string[] {
-  return [...state.activeTaskIds, ...state.failedTaskIds];
+  return [...state.activeTaskIds];
 }
 
 export function compactDispatcherState(state: DispatcherState): DispatcherState {
   return { activeTaskIds: [...state.activeTaskIds], completedTaskIds: [], failedTaskIds: [] };
+}
+
+function failureReason(error: unknown): string {
+  if (error && typeof error === "object" && "cause" in error && (error as { cause?: unknown }).cause) {
+    return failureReason((error as { cause: unknown }).cause);
+  }
+  return error instanceof Error ? error.message : String(error);
 }
 
 export async function WorkDispatcherWorkflow(input: DispatcherInput): Promise<DispatcherState> {
@@ -48,12 +55,13 @@ export async function WorkDispatcherWorkflow(input: DispatcherInput): Promise<Di
           await executeChild(WorkItemWorkflow, {
             args: [candidate.workflowInput],
             workflowId: `work-item-${candidate.id}`,
+            retry: { maximumAttempts: 1 },
           });
           await markTaskDone(candidate.id);
           state.completedTaskIds.push(candidate.id);
         } catch (error) {
           state.failedTaskIds.push(candidate.id);
-          await releaseTask(candidate.id, error instanceof Error ? error.message : String(error));
+          await recordTaskFailure(candidate.id, failureReason(error));
         } finally {
           state.activeTaskIds.splice(state.activeTaskIds.indexOf(candidate.id), 1);
         }

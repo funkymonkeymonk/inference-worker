@@ -20,6 +20,7 @@ const yaks: YxYak[] = [
       name: "high child",
       state: "todo",
       context: "new work",
+      tags: ["@implementation-failed"],
       children: [{ id: "high-grandchild", name: "high grandchild", state: "todo", context: "new work" }],
     }],
   },
@@ -54,8 +55,8 @@ function backend(runner: YxCommandRunner = async () => JSON.stringify(yaks)): Yx
 
 test("inherits root metadata and orders candidates by root priority then depth", async () => {
   const candidates = await backend().listDispatchCandidates({ excludeIds: [], limit: 10 });
-  assert.deepEqual(candidates.map((candidate) => candidate.id), ["high-grandchild", "high-child", "root-review", "low-child"]);
-  assert.equal(candidates[2].kind, "review");
+  assert.deepEqual(candidates.map((candidate) => candidate.id), ["root-review", "low-child"]);
+  assert.equal(candidates[0].kind, "review");
 });
 
 test("does not dispatch a root review until every child is terminal", async () => {
@@ -65,19 +66,27 @@ test("does not dispatch a root review until every child is terminal", async () =
 
 test("skips roots without valid metadata, exclusions, and applies limit", async () => {
   const candidates = await backend().listDispatchCandidates({ excludeIds: ["high-grandchild"], limit: 1 });
-  assert.deepEqual(candidates.map((candidate) => candidate.id), ["high-child"]);
+  assert.deepEqual(candidates.map((candidate) => candidate.id), ["root-review"]);
+});
+
+test("skips failed implementations and their descendants while keeping independent work eligible", async () => {
+  const candidates = await backend().listDispatchCandidates({ excludeIds: [], limit: 10 });
+  assert.deepEqual(candidates.map((candidate) => candidate.id), ["root-review", "low-child"]);
 });
 
 test("maps lifecycle operations to yx commands", async () => {
   const calls: string[][] = [];
-  const runner: YxCommandRunner = async (_command, args) => {
+  const inputs: string[] = [];
+  const runner: YxCommandRunner = async (_command, args, input) => {
     calls.push(args);
+    if (input !== undefined) inputs.push(input);
     return args[0] === "context" ? "context text" : "[]";
   };
   const taskBackend = backend(runner);
   await taskBackend.claim("yak-1");
   await taskBackend.release("yak-1", "agent failed");
   await taskBackend.markDone("yak-1");
+  await taskBackend.recordFailure("yak-1", "agent failed");
   assert.equal(await taskBackend.getContext("yak-1"), "context text");
   await taskBackend.attachPullRequest("yak-1", "https://github.com/example/pull/1");
   assert.deepEqual(calls, [
@@ -85,6 +94,12 @@ test("maps lifecycle operations to yx commands", async () => {
     ["state", "yak-1", "todo"],
     ["done", "yak-1"],
     ["context", "yak-1", "--show"],
+    ["context", "yak-1"],
+    ["tag", "add", "yak-1", "@implementation-failed"],
+    ["state", "yak-1", "todo"],
+    ["context", "yak-1", "--show"],
     ["field", "yak-1", "pull-request-url"],
   ]);
+  assert.match(inputs[0], /Implementation attempt/);
+  assert.match(inputs[0], /agent failed/);
 });

@@ -96,6 +96,7 @@ export interface TaskBackend {
   listDispatchCandidates(input: { excludeIds: string[]; limit: number }): Promise<DispatchCandidate[]>;
   claim(id: string): Promise<void>;
   release(id: string, reason: string): Promise<void>;
+  recordFailure(id: string, reason: string): Promise<void>;
   markDone(id: string): Promise<void>;
   getContext(id: string): Promise<string>;
   attachPullRequest(id: string, url: string): Promise<void>;
