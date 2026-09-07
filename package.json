@@ -9,7 +9,7 @@
     "client": "node dist/client.js",
     "dispatch": "node dist/dispatch.js",
     "ui": "node dist/ui.js",
-    "ui:dev": "YX_COMMAND=$(command -v yx) tsx watch --clear-screen=false src/ui.ts",
+    "ui:dev": "YX_COMMAND=${YX_COMMAND:-/run/current-system/sw/bin/yx} tsx watch --clear-screen=false src/ui.ts",
     "dev": "tsx src/worker.ts",
     "test": "tsx --test src/**/*.test.ts",
     "test:integration": "tsx --test --test-concurrency=1 integration/**/*.test.ts",
