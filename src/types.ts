@@ -79,6 +79,12 @@ export interface SplitPlan {
   proposals: SplitProposal[];
 }
 
+export interface SplitTaskInput {
+  taskId: string;
+  failureReason: string;
+  plan: SplitPlan;
+}
+
 export interface PlannerPolicy {
   model: string;
   maxRunTimeSeconds: number;
@@ -130,6 +136,7 @@ export interface TaskBackend {
   claim(id: string): Promise<void>;
   release(id: string, reason: string): Promise<void>;
   recordFailure(id: string, reason: string): Promise<void>;
+  splitTask(input: SplitTaskInput): Promise<void>;
   markDone(id: string): Promise<void>;
   getContext(id: string): Promise<string>;
   attachPullRequest(id: string, url: string): Promise<void>;

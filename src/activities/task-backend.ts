@@ -1,4 +1,4 @@
-import type { AgentToolName, DispatchCandidate, TaskBackend } from "../types.js";
+import type { AgentToolName, DispatchCandidate, SplitTaskInput, TaskBackend } from "../types.js";
 import { YxTaskBackend } from "../backends/yx.js";
 import { configFromEnvironment } from "../config.js";
 
@@ -14,6 +14,8 @@ function configuredBackend(): TaskBackend {
       maxRunTimeSeconds: config.agent.maxRunTimeSeconds,
       cleanupGraceSeconds: config.agent.cleanupGraceSeconds,
     },
+    maxYakDepth: config.dispatcher.maxYakDepth,
+    maxSplitChildren: config.dispatcher.maxSplitChildren,
   });
 }
 
@@ -31,6 +33,10 @@ export function releaseTask(id: string, reason: string): Promise<void> {
 
 export function recordTaskFailure(id: string, reason: string): Promise<void> {
   return configuredBackend().recordFailure(id, reason);
+}
+
+export function splitTask(input: SplitTaskInput): Promise<void> {
+  return configuredBackend().splitTask(input);
 }
 
 export function markTaskDone(id: string): Promise<void> {
