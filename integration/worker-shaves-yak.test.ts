@@ -11,7 +11,7 @@ import test from "node:test";
 import { temporalAddressFromEnvironment } from "../dist/temporal-address.js";
 
 const execFileAsync = promisify(execFile);
-const repositoryRoot = process.cwd();
+const projectRoot = process.cwd();
 const temporalAddress = process.env.INTEGRATION_TEMPORAL_ADDRESS ?? temporalAddressFromEnvironment();
 const temporalNamespace = process.env.INTEGRATION_TEMPORAL_NAMESPACE ?? "integration-inference";
 
@@ -19,13 +19,42 @@ function sse(events: unknown[]): string {
   return `${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join("")}data: [DONE]\n\n`;
 }
 
-async function yx(args: string[]): Promise<string> {
-  const result = await execFileAsync("yx", args, { cwd: repositoryRoot, maxBuffer: 4 * 1024 * 1024 });
+// Integration tests run the worker against a disposable git+jj repository so the
+// yx event store (and its git-synced refs/notes/yaks trail) never touches the real repo.
+interface IntegrationSandbox {
+  path: string;
+}
+
+async function createIntegrationSandbox(): Promise<IntegrationSandbox> {
+  const sandboxPath = await mkdtemp(path.join(os.tmpdir(), "inference-worker-yx-sandbox-"));
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  await execFileAsync("jj", ["git", "init"], { cwd: sandboxPath, env });
+  await execFileAsync("git", ["config", "user.name", "integration"], { cwd: sandboxPath, env });
+  await execFileAsync("git", ["config", "user.email", "integration@example.invalid"], { cwd: sandboxPath, env });
+  await writeFile(path.join(sandboxPath, ".gitignore"), ".yaks\n");
+  await writeFile(path.join(sandboxPath, "README.md"), "# integration sandbox\n");
+  await execFileAsync("git", ["add", ".gitignore", "README.md"], { cwd: sandboxPath, env });
+  await execFileAsync("git", ["commit", "-m", "integration sandbox"], { cwd: sandboxPath, env });
+  await execFileAsync("jj", ["git", "import"], { cwd: sandboxPath, env });
+  return { path: sandboxPath };
+}
+
+async function destroyIntegrationSandbox(sandbox: IntegrationSandbox): Promise<void> {
+  // yx creates yak directories read-only; restore write permission before removing so cleanup succeeds.
+  await execFileAsync("chmod", ["-R", "u+w", sandbox.path]).catch(() => undefined);
+  await rm(sandbox.path, { recursive: true, force: true }).catch(() => undefined);
+}
+
+async function yx(sandbox: IntegrationSandbox, args: string[]): Promise<string> {
+  // YX_ROOT anchors the yx store to the sandbox regardless of the invoking repo.
+  const env = { ...process.env, YX_ROOT: sandbox.path };
+  const result = await execFileAsync("yx", args, { cwd: sandbox.path, maxBuffer: 4 * 1024 * 1024, env });
   return result.stdout;
 }
 
-async function jj(args: string[]): Promise<string> {
-  const result = await execFileAsync("jj", args, { cwd: repositoryRoot, maxBuffer: 4 * 1024 * 1024 });
+async function jj(sandbox: IntegrationSandbox, args: string[]): Promise<string> {
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_SYSTEM: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+  const result = await execFileAsync("jj", args, { cwd: sandbox.path, env });
   return result.stdout;
 }
 
@@ -51,8 +80,9 @@ test("devenv worker dispatches and completes a real yak", async () => {
   const suffix = `${process.pid}-${Date.now()}`;
   const yakName = `integration worker shaves yak ${suffix}`;
   const markerName = `.integration-shaved-${suffix}.txt`;
-  const markerPath = path.join(repositoryRoot, markerName);
   const dispatcherWorkflowId = `integration-dispatcher-${suffix}`;
+  const sandbox = await createIntegrationSandbox();
+  const markerPath = path.join(sandbox.path, markerName);
   const server = createServer(async (request, response) => {
     let body = "";
     for await (const chunk of request) body += chunk;
@@ -69,17 +99,18 @@ test("devenv worker dispatches and completes a real yak", async () => {
   let worker: ReturnType<typeof spawn> | undefined;
   let workerOutput = "";
   try {
-    await yx(["add", yakName, "--state", "todo", "--context", `Use the write tool to create ${markerName} with the integration marker content.`]);
-    await yx(["tag", "add", yakName, "@g2g", "@priority:999"]);
-    worker = spawn(process.execPath, [path.join(repositoryRoot, "dist/worker.js")], {
-      cwd: repositoryRoot,
+    await yx(sandbox, ["add", yakName, "--state", "todo", "--context", `Use the write tool to create ${markerName} with the integration marker content.`]);
+    await yx(sandbox, ["tag", "add", yakName, "@g2g", "@priority:999"]);
+    worker = spawn(process.execPath, [path.join(projectRoot, "dist/worker.js")], {
+      cwd: sandbox.path,
       env: {
         ...process.env,
         TEMPORAL_ADDRESS: temporalAddress,
         TEMPORAL_NAMESPACE: temporalNamespace,
         TEMPORAL_TASK_QUEUE: `integration-worker-${suffix}`,
         DISPATCHER_WORKFLOW_ID: dispatcherWorkflowId,
-        REPOSITORY_ROOT: repositoryRoot,
+        REPOSITORY_ROOT: sandbox.path,
+        YX_ROOT: sandbox.path,
         TASK_BACKEND: "yx",
         DISPATCHER_POLL_INTERVAL_MS: "100",
         DISPATCHER_MAX_CONCURRENT_IMPLEMENTATIONS: "1",
@@ -91,14 +122,14 @@ test("devenv worker dispatches and completes a real yak", async () => {
     worker.stderr?.on("data", (chunk) => { workerOutput += chunk.toString(); });
     try {
     await waitFor(async () => {
-      const currentYaks = JSON.parse(await yx(["list", "--format", "json"])) as Array<{ name: string; state: string }>;
+      const currentYaks = JSON.parse(await yx(sandbox, ["list", "--format", "json"])) as Array<{ name: string; state: string }>;
       return findYak(currentYaks, yakName)?.state === "done";
     }, 90_000);
     } catch (error) {
-      const currentYaks = await yx(["list", "--format", "json"]).catch((yxError) => String(yxError));
+      const currentYaks = await yx(sandbox, ["list", "--format", "json"]).catch((yxError) => String(yxError));
       throw new Error(`${error instanceof Error ? error.message : String(error)}\nworker output:\n${workerOutput}\nyx state:\n${currentYaks}`);
     }
-    const yaks = JSON.parse(await yx(["list", "--format", "json"])) as Array<{ name: string; state: string; children?: Array<{ name: string; state: string }> }>;
+    const yaks = JSON.parse(await yx(sandbox, ["list", "--format", "json"])) as Array<{ name: string; state: string; children?: Array<{ name: string; state: string }> }>;
     assert.equal(findYak(yaks, yakName)?.state, "done", workerOutput);
   } finally {
     if (worker && worker.exitCode === null) {
@@ -117,7 +148,7 @@ test("devenv worker dispatches and completes a real yak", async () => {
       // The dispatcher may not have started if the worker failed during startup.
     }
     await rm(markerPath, { force: true });
-    await yx(["remove", "--recursive", yakName]).catch(() => undefined);
+    await destroyIntegrationSandbox(sandbox);
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });
@@ -162,28 +193,30 @@ test("devenv worker discards a timed-out workspace and creates bounded failure c
   let worker: ReturnType<typeof spawn> | undefined;
   let workerOutput = "";
   let parentId: string | undefined;
+  const sandbox = await createIntegrationSandbox();
   const shimDirectory = await mkdtemp(path.join(os.tmpdir(), "inference-worker-yx-shim-"));
   try {
-    await yx(["add", yakName, "--state", "todo", "--context", "The agent must exceed the test timeout."]);
-    await yx(["tag", "add", yakName, "@g2g", "@priority:999"]);
-    await yx(["add", independentName, "--state", "todo", "--context", "Complete independently."]);
-    await yx(["tag", "add", independentName, "@g2g", "@priority:1"]);
-    const initialYaks = JSON.parse(await yx(["list", "--format", "json"])) as Array<{ id: string; name: string }>;
+    await yx(sandbox, ["add", yakName, "--state", "todo", "--context", "The agent must exceed the test timeout."]);
+    await yx(sandbox, ["tag", "add", yakName, "@g2g", "@priority:999"]);
+    await yx(sandbox, ["add", independentName, "--state", "todo", "--context", "Complete independently."]);
+    await yx(sandbox, ["tag", "add", independentName, "@g2g", "@priority:1"]);
+    const initialYaks = JSON.parse(await yx(sandbox, ["list", "--format", "json"])) as Array<{ id: string; name: string }>;
     parentId = initialYaks.find((yak) => yak.name === yakName)?.id;
     assert.ok(parentId);
     const realYx = (await execFileAsync("which", ["yx"])).stdout.trim();
     const yxShim = path.join(shimDirectory, "yx");
     await writeFile(yxShim, `#!/usr/bin/env node\nimport { spawn } from "node:child_process";\nconst args = process.argv.slice(2);\nfor (let index = args.length - 2; index >= 0; index -= 1) {\n  if (args[index] === "--format" && args[index + 1] === "ids") args.splice(index, 2);\n}\nconst child = spawn(${JSON.stringify(realYx)}, args, { stdio: "inherit" });\nchild.on("exit", (code, signal) => process.exit(code ?? (signal ? 1 : 0)));\n`);
     await chmod(yxShim, 0o755);
-    worker = spawn(process.execPath, [path.join(repositoryRoot, "dist/worker.js")], {
-      cwd: repositoryRoot,
+    worker = spawn(process.execPath, [path.join(projectRoot, "dist/worker.js")], {
+      cwd: sandbox.path,
       env: {
         ...process.env,
         TEMPORAL_ADDRESS: temporalAddress,
         TEMPORAL_NAMESPACE: temporalNamespace,
         TEMPORAL_TASK_QUEUE: `integration-slow-worker-${suffix}`,
         DISPATCHER_WORKFLOW_ID: dispatcherWorkflowId,
-        REPOSITORY_ROOT: repositoryRoot,
+        REPOSITORY_ROOT: sandbox.path,
+        YX_ROOT: sandbox.path,
         TASK_BACKEND: "yx",
         DISPATCHER_POLL_INTERVAL_MS: "100",
         DISPATCHER_MAX_CONCURRENT_IMPLEMENTATIONS: "1",
@@ -200,20 +233,20 @@ test("devenv worker discards a timed-out workspace and creates bounded failure c
     worker.stderr?.on("data", (chunk) => { workerOutput += chunk.toString(); });
     await waitFor(async () => {
       if (!parentId) return false;
-      const yaks = JSON.parse(await yx(["list", "--format", "json"])) as Array<{ id: string; name: string; state: string; tags?: string[]; context?: string; children?: unknown[] }>;
+      const yaks = JSON.parse(await yx(sandbox, ["list", "--format", "json"])) as Array<{ id: string; name: string; state: string; tags?: string[]; context?: string; children?: unknown[] }>;
       const parent = findYak(yaks, yakName) as ({ state: string; tags?: string[]; context?: string; children?: unknown[] } | undefined);
       return slowAgentRequests >= 1 && plannerRequests >= 1 && parent?.tags?.includes("@implementation-failed") === true && parent.children?.length === 2;
     }, 30_000);
-    await waitFor(async () => findYak(JSON.parse(await yx(["list", "--format", "json"])), independentName)?.state === "done", 30_000);
-    const yaks = JSON.parse(await yx(["list", "--format", "json"])) as Array<{ name: string; state: string; tags?: string[]; children?: unknown[] }>;
+    await waitFor(async () => findYak(JSON.parse(await yx(sandbox, ["list", "--format", "json"])), independentName)?.state === "done", 30_000);
+    const yaks = JSON.parse(await yx(sandbox, ["list", "--format", "json"])) as Array<{ name: string; state: string; tags?: string[]; children?: unknown[] }>;
     const parent = findYak(yaks, yakName) as ({ state: string; tags?: string[]; context?: string; children?: Array<{ name: string; state: string; tags?: string[] }> } | undefined);
     assert.equal(parent?.children?.length, 2);
     assert.equal(parent?.tags?.includes("@implementation-failed"), true);
     assert.equal(findYak(yaks, independentName)?.state, "done");
-    assert.equal((await jj(["workspace", "list"])).includes(`inference-${parentId}`), false);
+    assert.equal((await jj(sandbox, ["workspace", "list"])).includes(`inference-${parentId}`), false);
     assert.match(workerOutput, /worker policy/);
   } catch (error) {
-    const currentYaks = await yx(["list", "--format", "json"]).catch((yxError) => String(yxError));
+    const currentYaks = await yx(sandbox, ["list", "--format", "json"]).catch((yxError) => String(yxError));
     throw new Error(`${error instanceof Error ? error.message : String(error)}\nworker output:\n${workerOutput}\nyx state:\n${currentYaks}`);
   } finally {
     for (const timer of pendingTimers) clearTimeout(timer);
@@ -231,8 +264,7 @@ test("devenv worker discards a timed-out workspace and creates bounded failure c
     } catch {
       // The dispatcher may not have started if the worker failed during startup.
     }
-    await yx(["remove", yakName]).catch(() => undefined);
-    await yx(["remove", independentName]).catch(() => undefined);
+    await destroyIntegrationSandbox(sandbox);
     await rm(shimDirectory, { recursive: true, force: true });
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
