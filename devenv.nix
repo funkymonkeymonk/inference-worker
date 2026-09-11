@@ -42,7 +42,6 @@
 in {
   packages = [
     pkgs.nodejs
-    pkgs.yx
     pkgs.git
     pkgs.jujutsu
     pkgs.temporal-cli
