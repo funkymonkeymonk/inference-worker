@@ -123,6 +123,27 @@ export interface WorkItemState {
   failure?: string;
 }
 
+export interface WorkerRuntimeConfig {
+  address: string;
+  namespace: string;
+  taskQueue: string;
+  repositoryRoot: string;
+  taskBackend: string;
+  inferenceEndpoint: string;
+  inferenceApiKey?: string;
+  githubToken?: string;
+  dispatcherWorkflowId: string;
+  pollIntervalMs: number;
+  maxConcurrentImplementations: number;
+  maxConcurrentActivityTaskExecutions: number;
+  policy: AgentPolicy;
+}
+
+export interface WorkerRegistration {
+  workflows: ((...args: any[]) => Promise<unknown>)[];
+  activities: Record<string, (...args: any[]) => Promise<unknown>>;
+}
+
 export type DispatchCandidateKind = "review" | "implementation";
 
 export interface DispatchCandidate {
