@@ -9,8 +9,8 @@
     "client": "node dist/client.js",
     "dispatch": "node dist/dispatch.js",
     "dev": "tsx src/worker.ts",
-    "test": "tsx --test src/**/*.test.ts",
-    "test:integration": "tsx --test --test-concurrency=1 integration/**/*.test.ts",
+    "test": "tsx --test src/*.test.ts src/*/*.test.ts",
+    "test:integration": "tsx --test --test-concurrency=1 integration/*.test.ts",
     "test:worker-integration": "tsx --test --test-concurrency=1 integration/worker-shaves-yak.test.ts"
   },
   "dependencies": {
