@@ -61,7 +61,18 @@ test("runs admitted work items concurrently up to the configured capacity", asyn
       executeAgent: async () => {
         running += 1;
         maximumRunning = Math.max(maximumRunning, running);
-        await new Promise((resolve) => setTimeout(resolve, 25));
+        if (running === 1) {
+          // First in flight: hold open until the second is observed in flight so
+          // the concurrency assertion does not depend on the two child executions
+          // being scheduled within a fixed window. Times out if they never overlap.
+          const deadline = Date.now() + 10_000;
+          while (running < 2 && Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 5));
+          }
+        } else {
+          // Second in flight: hold briefly so the first observes it as concurrent.
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
         running -= 1;
         return { completed: true, text: "done", toolCalls: 0 };
       },
