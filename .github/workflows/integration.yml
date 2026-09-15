@@ -1,0 +1,149 @@
+name: integration
+
+# The integration and worker-integration suites need a live Temporal server and the
+# "integration-inference" namespace. These jobs are advisory: the unit tier (unit.yml)
+# is the only required merge gate, and the ruleset gates on build-and-test.
+#
+# The environment is the repo's own devenv setup. `devenv up -d temporal` builds the
+# env (node, tsx, the yaks yx, jj, temporal-cli) from the committed devenv.nix and
+# starts the already-configured services.temporal (namespaces inference +
+# integration-inference). Every tool the suite and the spawned worker need lives in
+# the devenv env, so the test steps run through `devenv shell`.
+#
+# A fresh CI checkout has no .jj/ (gitignored), so `jj git init` restores the jj
+# workspace the worker-shaves-yak tests need. The suite runs an explicit test-glob
+# invocation (not `npm run test:integration`) so it is correct regardless of the
+# npm-test-glob PR's merge status.
+
+on:
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+env:
+  # The marker records the last main commit whose integration suite passed.
+  CI_STATE_REPO: "funkymonkeymonk/inference-worker-ci-state"
+  CI_STATE_FILE: "state.json"
+  CI_STATE_KEY: "lastSuccessfulMainSha"
+
+jobs:
+  # Advisory: runs on the pull request. A failure is reported but never blocks the
+  # merge; the unit tier is the required gate.
+  integration-on-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: /usr/bin
+      - uses: cachix/cachix-action@v16
+        with:
+          name: devenv
+      - name: Install devenv
+        run: nix profile add nixpkgs#devenv
+      - name: Build the environment and start Temporal
+        run: devenv up -d temporal
+      - name: Wait for Temporal
+        run: |
+          for i in $(seq 1 120); do
+            if devenv shell temporal operator cluster health 2>/dev/null | grep -q SERVING; then
+              echo "Temporal is ready"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Temporal did not become ready in time"
+          exit 1
+      - name: Prepare the jj workspace
+        run: devenv shell jj git init
+      - name: Install dependencies
+        run: devenv shell npm ci
+      - name: Build
+        run: devenv shell npm run build
+      - name: Run integration and worker-integration suites
+        # Explicit glob: the 3 test files sit at integration/ top level, so
+        # "integration/**/*.test.ts" matches nothing in dash (the same one-level-deep
+        # glob bug fixed for the unit script by the npm-test-glob PR).
+        run: devenv shell npx tsx --test --test-concurrency=1 integration/*.test.ts
+
+  # Nightly on main, but only when main advanced since the last successful
+  # integration run. On success it records the current commit in the marker repo so
+  # the next nightly knows what already passed.
+  integration-on-main:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Read the last successful marker
+        id: marker
+        run: |
+          set -uo pipefail
+          mkdir -p ci-state
+          if git clone --depth 1 "https://github.com/${{ env.CI_STATE_REPO }}" ci-state/repo; then
+            last="$(node -e 'const fs=require("fs");let s={};try{s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))}catch{};process.stdout.write(s[process.argv[2]]||"")' "ci-state/repo/${{ env.CI_STATE_FILE }}" "${{ env.CI_STATE_KEY }}" 2>/dev/null || true)"
+            [ -n "$last" ] && echo "last=$last" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Marker: ${last:-<none>}, current: ${GITHUB_SHA}"
+      - name: Skip when main is unchanged
+        if: steps.marker.outputs.last == github.sha
+        run: echo "Main is unchanged since the last successful integration run; skipping."
+      - uses: cachix/install-nix-action@v31
+        if: steps.marker.outputs.last != github.sha
+        with:
+          nix_path: /usr/bin
+      - uses: cachix/cachix-action@v16
+        if: steps.marker.outputs.last != github.sha
+        with:
+          name: devenv
+      - name: Install devenv
+        if: steps.marker.outputs.last != github.sha
+        run: nix profile add nixpkgs#devenv
+      - name: Build the environment and start Temporal
+        if: steps.marker.outputs.last != github.sha
+        run: devenv up -d temporal
+      - name: Wait for Temporal
+        if: steps.marker.outputs.last != github.sha
+        run: |
+          for i in $(seq 1 120); do
+            if devenv shell temporal operator cluster health 2>/dev/null | grep -q SERVING; then
+              echo "Temporal is ready"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Temporal did not become ready in time"
+          exit 1
+      - name: Prepare the jj workspace
+        if: steps.marker.outputs.last != github.sha
+        run: devenv shell jj git init
+      - name: Install dependencies
+        if: steps.marker.outputs.last != github.sha
+        run: devenv shell npm ci
+      - name: Build
+        if: steps.marker.outputs.last != github.sha
+        run: devenv shell npm run build
+      - name: Run integration and worker-integration suites
+        if: steps.marker.outputs.last != github.sha
+        run: devenv shell npx tsx --test --test-concurrency=1 integration/*.test.ts
+      - name: Record the successful marker
+        if: steps.marker.outputs.last != github.sha
+        env:
+          CI_STATE_TOKEN: ${{ secrets.ci_state_token }}
+        run: |
+          set -uo pipefail
+          mkdir -p ci-state
+          if ! git clone --depth 1 "https://github.com/${{ env.CI_STATE_REPO }}" ci-state/repo; then
+            mkdir -p ci-state/repo
+          fi
+          cd ci-state/repo
+          node -e 'const fs=require("fs");let s={};try{s=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))}catch{};s[process.argv[2]]=process.env.GITHUB_SHA;fs.writeFileSync(process.argv[1],JSON.stringify(s,null,2)+"\n")' "${{ env.CI_STATE_FILE }}" "${{ env.CI_STATE_KEY }}"
+          git init
+          git add "${{ env.CI_STATE_FILE }}"
+          git -c user.name="ci-integration" -c user.email="ci@users.noreply.github.com" commit -m "Record successful integration run $GITHUB_SHA"
+          git push "https://x-access-token:${CI_STATE_TOKEN}@github.com/${{ env.CI_STATE_REPO }}" HEAD:main

@@ -25,6 +25,47 @@
     '';
   };
 
+  # The yaks "yx" task tool (mattwynne/yaks). NOT the nixpkgs "yx" (a YAML parser):
+  # the worker and the worker-shaves-yak integration tests shell out to yx (add,
+  # list, tag, state), which the YAML parser cannot do. A fresh CI checkout has no
+  # private-overlay yx, so the env must provide the real yaks binary. The release
+  # ships a static-pie binary per platform (no shared-library deps).
+  yaksYxRelease =
+    if pkgs.stdenv.hostPlatform.system == "aarch64-darwin"
+    then {
+      url = "https://github.com/mattwynne/yaks/releases/download/v0.2.0/yx-macos-aarch64.zip";
+      hash = "sha256-tHd7gD2B5dZ/slH0b/tTkVjHtC8bu2wkTNYiq7aqvbg=";
+    }
+    else if pkgs.stdenv.hostPlatform.system == "x86_64-linux"
+    then {
+      url = "https://github.com/mattwynne/yaks/releases/download/v0.2.0/yx-linux-x86_64.zip";
+      hash = "sha256-NrF3b9Mcaiuyu0U2yGHw+humglN91jLbCeRO3xEtKlY=";
+    }
+    else throw "yaks does not provide a binary for ${pkgs.stdenv.hostPlatform.system}";
+
+  yaksYx = pkgs.stdenv.mkDerivation {
+    pname = "yaks-yx";
+    version = "0.2.0";
+    src = pkgs.fetchurl yaksYxRelease;
+    sourceRoot = ".";
+    dontConfigure = true;
+    dontBuild = true;
+
+    nativeBuildInputs = [pkgs.unzip];
+    unpackPhase = "unzip $src";
+
+    installPhase = ''
+      install -Dm755 bin/yx $out/bin/yx
+    '';
+
+    meta = with pkgs.lib; {
+      description = "Yaks - Shared Discovery Trees CLI (the yx task tool)";
+      homepage = "https://github.com/mattwynne/yaks";
+      license = licenses.mit;
+      mainProgram = "yx";
+    };
+  };
+
   workerPolicyEnvironment = ''
     export AGENT_MODEL="''${AGENT_MODEL-omlx/qwen3.8-27b}"
     export AGENT_MAX_RUN_TIME_SECONDS="''${AGENT_MAX_RUN_TIME_SECONDS-7200}"
@@ -42,7 +83,7 @@
 in {
   packages = [
     pkgs.nodejs
-    pkgs.yx
+    yaksYx
     pkgs.git
     pkgs.jujutsu
     pkgs.temporal-cli
